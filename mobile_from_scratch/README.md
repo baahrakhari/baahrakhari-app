@@ -1,4 +1,14 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Baahrakhari Mobile App
+
+Release checklist and ship steps are tracked in `docs/RELEASE_READINESS.md`.
+
+Quick validation before release:
+
+```sh
+npm run verify
+```
+
+This project is based on [**React Native**](https://reactnative.dev) using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
 

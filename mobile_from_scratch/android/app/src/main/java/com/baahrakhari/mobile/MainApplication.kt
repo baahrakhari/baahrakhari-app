@@ -1,4 +1,4 @@
-package com.mobilefromscratchapp
+package com.baahrakhari.mobile
 
 import android.app.Application
 import com.facebook.react.PackageList
