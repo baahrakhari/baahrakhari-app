@@ -114,8 +114,8 @@ def invert_rgb_keep_alpha(im: Image.Image) -> Image.Image:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[2]
-    icons = root / "mobile_from_scratch" / "assets" / "icons"
+    root = Path(__file__).resolve().parents[1]
+    icons = root / "assets" / "icons"
     share = icons / "share_icon.png"
     save = icons / "save_article.png"
     if share.exists():

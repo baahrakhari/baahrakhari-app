@@ -1,6 +1,6 @@
 # Baahrakhari Release Commands (v1.1.0)
 
-Run all commands from `mobile_from_scratch/` unless noted.
+Run all commands from the repository root (this React Native project root) unless noted.
 
 ## 1) Preflight checks
 ```sh

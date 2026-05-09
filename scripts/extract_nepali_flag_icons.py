@@ -129,8 +129,8 @@ def extract_outline(
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[2]
-    asset_dir = root / "mobile_from_scratch" / "assets" / "icons"
+    root = Path(__file__).resolve().parents[1]
+    asset_dir = root / "assets" / "icons"
     legacy_icons = root / "icons"
     ref = root / "icons" / "refs"
     cursor_fallback = Path(

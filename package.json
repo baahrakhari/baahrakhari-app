@@ -1,12 +1,53 @@
 {
-  "name": "baahrakhari",
-  "version": "0.0.1",
+  "name": "baahrakhari-mobile",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
-    "start": "node node_modules/react-native/local-cli/cli.js start"
+    "postinstall": "patch-package",
+    "android": "adb reverse tcp:8081 tcp:8081 2>/dev/null || true; react-native run-android --terminal /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal",
+    "android:no-packager": "adb reverse tcp:8081 tcp:8081 2>/dev/null || true; react-native run-android --no-packager",
+    "ios": "react-native run-ios",
+    "pod-install": "cd ios && bundle exec pod install",
+    "lint": "eslint .",
+    "start": "react-native start",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run lint && npm run typecheck && npm test",
+    "android:release": "cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
-    "react": "15.3.2",
-    "react-native": "0.34.1"
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-native-community/push-notification-ios": "^1.12.0",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "^2.31.2",
+    "react-native-push-notification": "^8.1.1",
+    "react-native-safe-area-context": "^5.5.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.85.3",
+    "@react-native/eslint-config": "0.85.3",
+    "@react-native/jest-preset": "0.85.3",
+    "@react-native/metro-config": "0.85.3",
+    "@react-native/typescript-config": "0.85.3",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "@types/react-native-push-notification": "^8.1.4",
+    "@types/react-test-renderer": "^19.1.0",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "patch-package": "^8.0.1",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
   }
 }

@@ -10,9 +10,9 @@ from PIL import Image
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[2]
-    src = root / "mobile_from_scratch" / "assets" / "icons" / "save_article.png"
-    dst = root / "mobile_from_scratch" / "assets" / "icons" / "save_article_inner_template.png"
+    root = Path(__file__).resolve().parents[1]
+    src = root / "assets" / "icons" / "save_article.png"
+    dst = root / "assets" / "icons" / "save_article_inner_template.png"
     im = Image.open(src).convert("RGBA")
     w, h = im.size
     px = im.load()

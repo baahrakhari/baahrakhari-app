@@ -1,6 +1,6 @@
 # Baahrakhari Mobile Build Plan
 
-This document tracks execution of the `mobile_from_scratch` app roadmap.
+This document tracks execution of the Baahrakhari React Native app roadmap.
 
 ## Scope
 
