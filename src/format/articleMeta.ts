@@ -1,5 +1,8 @@
 import type {Article} from '../types/article';
 
+/** Shown when an article has no byline — Baahrakhari is the original publisher. */
+const DEFAULT_PUBLISHER = 'Baahrakhari';
+
 export function formatRelativeEnglish(timestampMs: number): string {
   if (!timestampMs || timestampMs <= 0) {
     return '';
@@ -32,7 +35,7 @@ export function formatRelativeEnglish(timestampMs: number): string {
 }
 
 export function formatArticleMetaLine(article: Article): string {
-  const author = article.author?.trim();
+  const author = article.author?.trim() || DEFAULT_PUBLISHER;
   const nepali = article.publishedNepali?.trim();
   const ts = article.publishedAtMs ?? article.fetchedAt;
   const rel = formatRelativeEnglish(ts);

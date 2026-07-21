@@ -1,53 +1,101 @@
 # Baahrakhari Mobile Release Readiness
 
-## Release metadata set
-- App name: `Baahrakhari` (Android + iOS display name)
-- Android package/namespace: `com.baahrakhari.mobile`
-- iOS bundle identifier: `com.baahrakhari.mobile`
-- App version: `1.1.0`
+## Current release target
 
-## Implemented release features
-- Dynamic article refresh with adaptive prefetch based on observed network speed
-- Manual refresh triggers:
-  - Pull-to-refresh on feed
-  - Home button refresh
-  - App startup fetch
-- Saved articles persisted in local storage for reopen/offline reading
-- Optional local article alerts (hourly checks, max once/hour)
+| Platform | Identifier | Version |
+|---|---|---|
+| Android (Play) | `com.baahrakhari.media` | **1.2.6** (`versionCode 126`) |
+| iOS (App Store) | `com.baahrakhari` | 1.1.0+ (see `docs/app-store/`) |
 
-## Required pre-release actions (must-do)
-- Android signing
-  - Add these to `android/gradle.properties` (or CI secrets):
-    - `MYAPP_UPLOAD_STORE_FILE=...`
-    - `MYAPP_UPLOAD_STORE_PASSWORD=...`
-    - `MYAPP_UPLOAD_KEY_ALIAS=...`
-    - `MYAPP_UPLOAD_KEY_PASSWORD=...`
-- iOS signing
-  - Configure team/provisioning in Xcode for `com.baahrakhari.mobile`
-- Notification permissions testing
-  - Android 13+ runtime permission flow
-  - iOS prompt acceptance/denial flow
+Display name: **Baahrakhari**
 
-## Verify before tagging
+---
+
+## Google Play — active submission
+
+Policy resubmission after appeal case **3-4690000040664** (News & Magazines).
+
+| Doc | Purpose |
+|---|---|
+| `docs/play-store/NEWS_POLICY_COMPLIANCE.md` | Full upload checklist + Play Console fields |
+| `docs/play-store/RELEASE_NOTES.md` | Copy-paste release notes (en + ne) |
+| `docs/play-store/DEOBFUSCATION_NOTE.md` | R8 / mapping file warning (informational) |
+| `docs/RELEASE_COMMANDS.md` | Build commands |
+
+**Contact URL for declaration:** `https://baahrakhari.com/contact`
+
+**AAB output:** `android/app/build/outputs/bundle/release/app-release.aab`
+
+---
+
+## Features in this Android release (1.2.6)
+
+- Full Baahrakhari feed with adaptive prefetch and pull-to-refresh
+- Pinch-to-zoom article text with remembered size
+- Saved articles for offline reading
+- Optional local new-story alerts (off by default)
+- Light / dark mode
+- **Contact Us** page (policy compliance) with English contact copy
+- Home feed footer **Contact Us** link (Android only, front page, Google Play requirement); burger-menu **Contact Us** entry on Android and iOS
+- Publisher attribution on articles (author or Baahrakhari)
+- Share icon rendering fix on Android
+
+---
+
+## Required pre-release actions
+
+### Android signing
+
+Local `android/gradle.properties` (do not commit secrets):
+
+- `MYAPP_UPLOAD_STORE_FILE` → `12khari.jks`
+- `MYAPP_UPLOAD_KEY_ALIAS` → `abp`
+- `MYAPP_UPLOAD_STORE_PASSWORD` / `MYAPP_UPLOAD_KEY_PASSWORD`
+- `APP_VERSION_CODE=126`, `APP_VERSION_NAME=1.2.6`
+
+### Play Console (before Send for review)
+
+- Store settings: website, email, phone
+- App content → News and magazine apps → contact URL
+- Upload AAB + release notes
+
+### iOS signing
+
+- Xcode team + provisioning for `com.baahrakhari`
+
+---
+
+## Verify before upload
+
 ```sh
-npm run verify
+npm run typecheck
+cd android && ./gradlew bundleRelease
 ```
+
+Device test checklist in `docs/RELEASE_COMMANDS.md` section 3.
+
+---
 
 ## Build commands
-```sh
-# Android release APK/AAB path from Gradle output
-npm run android:release
 
-# iOS release archive (run in Xcode)
-# Product -> Archive
+```sh
+# Android AAB (Play)
+cd android && ./gradlew bundleRelease
+
+# Android APK (quick test)
+cd android && ./gradlew assembleRelease
+
+# iOS — Xcode Product → Archive
 ```
 
+---
+
 ## Suggested release process
-1. Run `npm run verify`
-2. Build release binaries on clean machine/CI
-3. Install on real Android+iOS devices
-4. Verify:
-   - Feed loading + swipe UX
-   - Saved/offline read flow
-   - Notification toggle + alert timing behavior
-5. Tag and publish store submissions
+
+1. Bump `APP_VERSION_CODE` / `APP_VERSION_NAME` in `android/gradle.properties`
+2. Update `docs/play-store/RELEASE_NOTES.md`
+3. Build AAB and install APK on a real device
+4. Run smoke tests (feed, Contact, share icon, offline save)
+5. Update Play Console listing + News declaration
+6. Upload AAB, paste release notes, **Send for review**
+7. Tag: `git tag v1.2.6`

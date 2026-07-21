@@ -9,7 +9,11 @@ export type CategorySlug =
   | 'editorial'
   | 'international';
 
-export type CategoryKey = 'home' | CategorySlug;
+/**
+ * `'contact-us'` is a pseudo-category for the dedicated in-app Contact Us page
+ * (not a scrape feed).
+ */
+export type CategoryKey = 'home' | CategorySlug | 'contact-us';
 
 export type ParsedArticle = {
   id: string;

@@ -7,9 +7,13 @@ import {
   type PinchGestureHandlerEventPayload,
   type PinchGestureHandlerGestureEvent,
 } from 'react-native-gesture-handler';
+import {
+  ARTICLE_FONT_MIN as DEVICE_ARTICLE_FONT_MIN,
+  ARTICLE_FONT_MAX as DEVICE_ARTICLE_FONT_MAX,
+} from '../theme/device';
 
-export const ARTICLE_FONT_MIN = 14;
-export const ARTICLE_FONT_MAX = 30;
+export const ARTICLE_FONT_MIN = DEVICE_ARTICLE_FONT_MIN;
+export const ARTICLE_FONT_MAX = DEVICE_ARTICLE_FONT_MAX;
 
 type Props = {
   children: React.ReactNode;

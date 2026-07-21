@@ -29,6 +29,14 @@ jest.mock('../src/state/useArticleFeed', () => ({
   }),
 }));
 
+jest.mock('../src/state/useHomeSections', () => ({
+  useHomeSections: () => ({
+    breaking: [],
+    sections: [],
+    loading: false,
+  }),
+}));
+
 jest.mock('../src/state/useReadLater', () => ({
   useReadLater: () => ({
     saved: [],
@@ -37,6 +45,17 @@ jest.mock('../src/state/useReadLater', () => ({
     toggleSaved: jest.fn(() => Promise.resolve(false)),
     unsave: jest.fn(() => Promise.resolve()),
     maxSaved: 20,
+  }),
+}));
+
+jest.mock('../src/state/useInfoPages', () => ({
+  useInfoPages: () => ({
+    about: undefined,
+    team: undefined,
+    loading: false,
+    online: true,
+    error: null,
+    refresh: jest.fn(),
   }),
 }));
 

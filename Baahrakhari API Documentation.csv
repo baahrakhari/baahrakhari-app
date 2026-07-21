@@ -1,0 +1,16 @@
+Baahrakhari API Documentation,,,,,,
+,,,,,,
+Base URL,https://baahrakhari.com/,,,,,
+,,,,,,
+S.N.,Section,API Name,Method,Endpoint,Full URL,Description / Parameters
+1,Homepage APIs,Get Banner Data,GET,/getBannerDatas,https://baahrakhari.com/api/getBannerDatas,Returns homepage banner data.
+2,Homepage APIs,Get Advertisement Data,GET,/getAdvertisementData,https://baahrakhari.com/api/getAdvertisementData,Returns advertisement data displayed on the homepage.
+3,Homepage APIs,Get Latest News,GET,/getTajaNewsData,https://baahrakhari.com/api/getTajaNewsData,Returns the latest news list.
+4,Listing & Detail APIs,Get Inner Sidebar,GET,/getInnerSidebarList,https://baahrakhari.com/api/getInnerSidebarList,Returns the inner sidebar news list.
+5,Listing & Detail APIs,Category News Listing,GET,/getCategoryList/{slug},https://baahrakhari.com/api/getCategoryList/{slug},Path parameter: slug
+6,Listing & Detail APIs,News Detail,GET,/getNewsDetailData/{id},https://baahrakhari.com/api/getNewsDetailData/{id},Path parameter: id
+7,Listing & Detail APIs,Tag News,GET,/getTagNews/{id},https://baahrakhari.com/api/getTagNews/{id},Path parameter: id
+8,Listing & Detail APIs,Author News,GET,/getAuthorNews/{author_id},https://baahrakhari.com/api/getAuthorNews/{author_id},Path parameter: author_id
+9,Listing & Detail APIs,Author Line News,GET,/getAuthorLineNews/{name},https://baahrakhari.com/api/getAuthorLineNews/{name},Path parameter: name
+10,Listing & Detail APIs,Static Page,GET,/getStaticPageData/{slug},https://baahrakhari.com/api/getStaticPageData/{slug},Path parameter: slug
+11,Listing & Detail APIs,Search News,GET,/search,https://baahrakhari.com/api/search?q={keyword}&limit=20,"Query parameters: q (string, required) – search keyword; limit (integer, optional, default 20) – number of records to return."

@@ -58,6 +58,24 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
+def hasReleaseSigning = project.hasProperty('MYAPP_UPLOAD_STORE_FILE') &&
+    project.hasProperty('MYAPP_UPLOAD_STORE_PASSWORD') &&
+    project.hasProperty('MYAPP_UPLOAD_KEY_ALIAS') &&
+    project.hasProperty('MYAPP_UPLOAD_KEY_PASSWORD')
+def releaseTasksRequested = gradle.startParameter.taskNames.any { task ->
+    def t = task.toLowerCase()
+    t.contains("release") || t.contains("bundle")
+}
+def appVersionCodeValue = (
+    project.findProperty("APP_VERSION_CODE") ?:
+    System.getenv("APP_VERSION_CODE") ?:
+    "2"
+).toString().toInteger()
+def appVersionNameValue = (
+    project.findProperty("APP_VERSION_NAME") ?:
+    System.getenv("APP_VERSION_NAME") ?:
+    "1.1.0"
+).toString()
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -82,8 +100,9 @@ android {
         applicationId (findProperty("APP_APPLICATION_ID") ?: "com.baahrakhari.mobile")
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.1.0"
+        // Updated release: keep versionName aligned with package.json and increment versionCode per Play upload.
+        versionCode appVersionCodeValue
+        versionName appVersionNameValue
     }
     signingConfigs {
         debug {
@@ -93,12 +112,7 @@ android {
             keyPassword 'android'
         }
         release {
-            if (
-                project.hasProperty('MYAPP_UPLOAD_STORE_FILE') &&
-                project.hasProperty('MYAPP_UPLOAD_STORE_PASSWORD') &&
-                project.hasProperty('MYAPP_UPLOAD_KEY_ALIAS') &&
-                project.hasProperty('MYAPP_UPLOAD_KEY_PASSWORD')
-            ) {
+            if (hasReleaseSigning) {
                 storeFile file(MYAPP_UPLOAD_STORE_FILE)
                 storePassword MYAPP_UPLOAD_STORE_PASSWORD
                 keyAlias MYAPP_UPLOAD_KEY_ALIAS
@@ -111,8 +125,14 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Falls back to debug signing only when release keys are not provided.
-            signingConfig project.hasProperty('MYAPP_UPLOAD_STORE_FILE') ? signingConfigs.release : signingConfigs.debug
+            // Never ship a Play artifact signed with debug keys.
+            if (!hasReleaseSigning && releaseTasksRequested) {
+                throw new GradleException(
+                    "Missing Android release signing properties. Set MYAPP_UPLOAD_STORE_FILE, " +
+                    "MYAPP_UPLOAD_STORE_PASSWORD, MYAPP_UPLOAD_KEY_ALIAS, MYAPP_UPLOAD_KEY_PASSWORD."
+                )
+            }
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

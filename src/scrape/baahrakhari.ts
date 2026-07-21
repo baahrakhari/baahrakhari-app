@@ -26,6 +26,14 @@ function stripTags(html: string): string {
     .trim();
 }
 
+/** Plain text from an HTML fragment (API `content`, bylines, etc.). */
+export function htmlToPlainText(html: string): string {
+  if (!html?.trim()) {
+    return '';
+  }
+  return decodeEntities(stripTags(html)).trim();
+}
+
 function decodeEntities(raw: string): string {
   let s = raw;
   /** Some blocks are double-encoded; decode passes stabilize quickly (<=3). */

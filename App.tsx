@@ -1,12 +1,14 @@
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Modal,
   Pressable,
+  Platform,
   ScrollView,
   Share,
   StatusBar,
@@ -17,12 +19,20 @@ import {
   type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
-import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
-import {NEWS_CATEGORIES} from './src/config/site';
-import {fetchHtml, parseDetailArticle} from './src/scrape/baahrakhari';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
+import {CONTACT_INFO_EN, FOOTER_INFO, INFO_LINKS, NEWS_CATEGORIES, SITE_CONTACT_URL, APP_PUBLISHER, nepaliDigitsToAscii, type ContactBlocksContent} from './src/config/site';
+import {parseBaahrakhariArticleUrl} from './src/linking/baahrakhariUrls';
+import {fetchNewsDetail} from './src/scrape/tajaNewsApi';
 import {useArticleAlerts} from './src/state/useArticleAlerts';
 import {useArticleFeed} from './src/state/useArticleFeed';
+import {useHomeSections, type HomeCategorySection} from './src/state/useHomeSections';
+import {useInfoPages} from './src/state/useInfoPages';
 import {useReadLater} from './src/state/useReadLater';
+import type {InfoPageKey} from './src/types/infoPages';
 import {ScrollView as GHScrollView} from 'react-native-gesture-handler';
 import {
   PinchZoomArticleBody,
@@ -30,53 +40,113 @@ import {
   ARTICLE_FONT_MIN,
 } from './src/components/PinchZoomArticleBody';
 import {Colors} from './src/theme/colors';
+import {
+  READING_DEFAULT_BODY,
+  isIPad,
+  scaleFont,
+} from './src/theme/device';
 import type {Article, CategoryKey, SavedArticle} from './src/types/article';
 import {DentArticleAction} from './src/components/DentArticleAction';
+import {AppSplash} from './src/components/AppSplash';
 import {formatArticleMetaLine} from './src/format/articleMeta';
 
 const HOME_ICON = '⌂';
+const BURGER_ICON = '☰';
 const ICON_SAVE_ARTICLE = require('./assets/icons/save_article.png');
 const ICON_SAVE_ARTICLE_DARK = require('./assets/icons/save_article_dark.png');
 const ICON_READ_LATER = require('./assets/icons/read_later_icon.png');
 const ICON_SHARE = require('./assets/icons/share_icon.png');
 const ICON_SHARE_DARK = require('./assets/icons/share_icon_dark.png');
-const ICON_BRAND = require('./assets/icons/12khari_app_icon.png');
+/** Wide mark for iPad header (next to home); source 201×88 px */
+const ICON_BRAND_LONG = require('./assets/icons/12kharilogo_longer.png');
 const ICON_REMOVE_BOOKMARK = require('./assets/icons/remove_bookmark.png');
 const ICON_REMOVE_BOOKMARK_DARK = require('./assets/icons/remove_bookmark_dark.png');
 const ICON_THEME_MOON = require('./assets/icons/nepali_flag_moon.png');
 const ICON_THEME_SUN = require('./assets/icons/nepali_flag_sun.png');
 /** White interior blob — tinted with accent when article is saved */
 const ICON_SAVE_INNER_TEMPLATE = require('./assets/icons/save_article_inner_template.png');
-const APP_TITLE = 'बाह्रखरी';
 /** Hit box matches meta row icon button */
 const ARTICLE_SAVE_ICON_BOX = 36;
+/** Share glyph ~70% of action button — fixed px avoids Android compositing glitches */
+const ARTICLE_SHARE_ICON_SIZE = 25;
 /** Pixels: treat body as scrollable only if content is taller than the viewport by at least this much. */
 const SCROLL_CHROME_EPS = 3;
 
+/**
+ * Pure hero-height math shared by the reactive `resolveHeroHeight` (used in
+ * render) and the ref-driven copy inside `onViewableItemsChanged` (which
+ * FlatList freezes on mount and can't be swapped for a fresh closure).
+ */
+function computeHeroHeightPx(
+  hasImage: boolean,
+  aspect: number | undefined,
+  screenWidth: number,
+  bounds: {min: number; max: number; fallback: number; noImage: number},
+): number {
+  if (!hasImage) {
+    return bounds.noImage;
+  }
+  if (!aspect) {
+    return bounds.fallback;
+  }
+  return Math.max(bounds.min, Math.min(bounds.max, Math.round(screenWidth * aspect)));
+}
+
 function App(): React.JSX.Element {
+  return (
+    <SafeAreaProvider>
+      <AppBody />
+    </SafeAreaProvider>
+  );
+}
+
+function AppBody(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const [isDark, setIsDark] = useState(false);
   const [mode, setMode] = useState<'feed' | 'read'>('feed');
   const [category, setCategory] = useState<CategoryKey>('home');
-  const [bodyFontSize, setBodyFontSize] = useState(17);
+  /**
+   * Home opens as a website-style title list ("ताजा समाचार" + हाम्रो footer).
+   * Tapping a title drills into the existing swipe reader at that index;
+   * the home icon resets us back to the list.
+   */
+  const [homeDrilled, setHomeDrilled] = useState(false);
+  const [homeStartIndex, setHomeStartIndex] = useState(0);
+  const [bodyFontSize, setBodyFontSize] = useState(READING_DEFAULT_BODY);
+  const [, setFocusedIndex] = useState(0);
   const bodyFontSizeRef = useRef(bodyFontSize);
   bodyFontSizeRef.current = bodyFontSize;
   const [isHeroCollapsed, setIsHeroCollapsed] = useState(false);
-  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
-  const [headerPinnedExpanded, setHeaderPinnedExpanded] = useState(false);
   const [swipeHintDir, setSwipeHintDir] = useState<'next' | 'prev' | null>(null);
   const [readModalArticle, setReadModalArticle] = useState<SavedArticle | null>(null);
+  /** Side burger menu — replaces the old collapsing category bar. */
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  /** Saved-article / deep-link modal hero — sized on load to avoid cropping, no collapse needed. */
+  const [readHeroHeight, setReadHeroHeight] = useState(220);
   const width = Dimensions.get('window').width;
   const height = Dimensions.get('window').height;
   const pagerRef = useRef<FlatList<Article>>(null);
   const transitionAnim = useRef(new Animated.Value(1)).current;
-  const headerCompactAnim = useRef(new Animated.Value(0)).current;
+  const drawerAnim = useRef(new Animated.Value(0)).current;
   const swipeHintOpacity = useRef(new Animated.Value(0)).current;
   const horizontalOffsetRef = useRef(0);
   const lastHintAtRef = useRef(0);
-  const heroExpanded = Math.max(150, height * 0.2);
+  /**
+   * Hero image sizing: the box height tracks each article's own image
+   * aspect ratio (measured on load) so the full picture is visible on
+   * open — never just a cropped sliver — while still collapsing to a
+   * thin title strip once the reader scrolls into the body.
+   */
+  const HERO_MIN_HEIGHT = 200;
+  const HERO_MAX_HEIGHT = Math.round(height * 0.62);
+  const HERO_DEFAULT_HEIGHT = Math.max(220, Math.round(height * 0.42));
+  const HERO_NO_IMAGE_HEIGHT = Math.max(160, Math.round(height * 0.22));
+  const [heroExpanded, setHeroExpanded] = useState(HERO_DEFAULT_HEIGHT);
+  const heroAspectRef = useRef<Record<string, number>>({});
   /** Scroll-collapse: title strip only (image hidden); taller than old partial collapse */
   const heroCollapsedReading = Math.max(52, Math.min(72, Math.floor(height * 0.072)));
-  const heroHeightAnim = useRef(new Animated.Value(heroExpanded)).current;
+  const heroHeightAnim = useRef(new Animated.Value(HERO_DEFAULT_HEIGHT)).current;
   const heroCollapsedRef = useRef(false);
   const articleBodyViewportHRef = useRef<Record<string, number>>({});
   /** Which feed article owns scroll-driven chrome (ignore off-screen rows). */
@@ -87,12 +157,107 @@ function App(): React.JSX.Element {
     loading,
     error,
     hydrateArticle,
-    prefetchTarget,
     reload,
   } =
     useArticleFeed(category);
   const {saved, isSaved, toggleSaved, unsave, loadingSaved, maxSaved} = useReadLater();
-  useArticleAlerts();
+  const homeSections = useHomeSections();
+  const heroBounds = useMemo(
+    () => ({
+      min: HERO_MIN_HEIGHT,
+      max: HERO_MAX_HEIGHT,
+      fallback: HERO_DEFAULT_HEIGHT,
+      noImage: HERO_NO_IMAGE_HEIGHT,
+    }),
+    [HERO_DEFAULT_HEIGHT, HERO_MAX_HEIGHT, HERO_MIN_HEIGHT, HERO_NO_IMAGE_HEIGHT],
+  );
+  /**
+   * `onViewableItemsChanged` is frozen by FlatList at mount (RN forbids
+   * swapping that prop), so it reads live data through this ref rather
+   * than through `articleById` directly.
+   */
+  const articleByIdRef = useRef(articleById);
+  articleByIdRef.current = articleById;
+  /**
+   * FlatList freezes `onViewableItemsChanged` at mount, so listing rows and
+   * hydrate must be read through refs — otherwise category switches keep the
+   * first (empty) `items` closure and focus/hydration silently break.
+   */
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const hydrateArticleRef = useRef(hydrateArticle);
+  hydrateArticleRef.current = hydrateArticle;
+  /** After the first chrome paint, never replace the whole shell with splash. */
+  const hasPresentedChromeRef = useRef(false);
+
+  /** Height (px) that shows `articleId`'s hero image with no cropping, clamped to sane bounds. */
+  const resolveHeroHeight = useCallback(
+    (articleId: string | null | undefined): number =>
+      computeHeroHeightPx(
+        !!(articleId && articleById[articleId]?.imageUrl),
+        articleId ? heroAspectRef.current[articleId] : undefined,
+        width,
+        heroBounds,
+      ),
+    [articleById, heroBounds, width],
+  );
+
+  /** Snap the hero box to the right height for `articleId` (or the generic default) without animating. */
+  const focusHero = useCallback(
+    (articleId: string | null | undefined) => {
+      const target = resolveHeroHeight(articleId);
+      setHeroExpanded(target);
+      heroHeightAnim.setValue(target);
+    },
+    [heroHeightAnim, resolveHeroHeight],
+  );
+
+  /** Record a loaded hero image's real aspect ratio and resize the box to fit it (if it's the visible one). */
+  const onHeroImageLoad = useCallback(
+    (articleId: string, w: number, h: number) => {
+      if (!w || !h) {
+        return;
+      }
+      heroAspectRef.current[articleId] = h / w;
+      if (focusedArticleIdRef.current !== articleId || heroCollapsedRef.current) {
+        return;
+      }
+      const target = resolveHeroHeight(articleId);
+      setHeroExpanded(target);
+      Animated.timing(heroHeightAnim, {
+        toValue: target,
+        duration: 200,
+        useNativeDriver: false,
+      }).start();
+    },
+    [heroHeightAnim, resolveHeroHeight],
+  );
+  /**
+   * Owns offline-friendly About / Team content. The hook pre-fetches on app
+   * launch and persists via AsyncStorage, so the in-app overlay opens
+   * instantly — even without internet.
+   */
+  const infoPages = useInfoPages();
+  const [infoOverlay, setInfoOverlay] = useState<InfoPageKey | null>(null);
+  const pendingDeepLinkIdRef = useRef<string | null>(null);
+
+  const openArticleFromUrl = useCallback(
+    (rawUrl: string) => {
+      const parsed = parseBaahrakhariArticleUrl(rawUrl);
+      if (!parsed) {
+        return;
+      }
+      setMode('feed');
+      setCategory('home');
+      setHomeDrilled(false);
+      setHomeStartIndex(0);
+      pendingDeepLinkIdRef.current = parsed.id;
+      reload();
+    },
+    [reload],
+  );
+
+  useArticleAlerts({onOpenArticle: openArticleFromUrl});
 
   const palette = useMemo(
     () =>
@@ -146,22 +311,28 @@ function App(): React.JSX.Element {
       if (i == null || i < 0) {
         return;
       }
-      const cur = items[i];
-      const next = items[i + 1];
+      setFocusedIndex(i);
+      const list = itemsRef.current;
+      const cur = list[i];
+      const next = list[i + 1];
       if (cur) {
         focusedArticleIdRef.current = cur.id;
-        hydrateArticle(cur).catch(() => {});
+        hydrateArticleRef.current(cur).catch(() => {});
       }
       if (next) {
-        hydrateArticle(next).catch(() => {});
+        hydrateArticleRef.current(next).catch(() => {});
       }
-      /** New article is active: restore hero to default size. */
+      /** New article is active: restore hero to full height, sized for its own image. */
       heroCollapsedRef.current = false;
       setIsHeroCollapsed(false);
-      setIsHeaderCompact(false);
-      setHeaderPinnedExpanded(false);
-      headerCompactAnim.setValue(0);
-      heroHeightAnim.setValue(heroExpanded);
+      const nextHeroHeight = computeHeroHeightPx(
+        !!(cur && articleByIdRef.current[cur.id]?.imageUrl),
+        cur ? heroAspectRef.current[cur.id] : undefined,
+        width,
+        heroBounds,
+      );
+      setHeroExpanded(nextHeroHeight);
+      heroHeightAnim.setValue(nextHeroHeight);
       transitionAnim.setValue(0.985);
       Animated.timing(transitionAnim, {
         toValue: 1,
@@ -177,8 +348,7 @@ function App(): React.JSX.Element {
       return;
     }
     try {
-      const html = await fetchHtml(article.url);
-      const detailed = parseDetailArticle(article, html);
+      const detailed = await fetchNewsDetail(article.id);
       await toggleSaved({
         ...article,
         ...detailed,
@@ -195,61 +365,205 @@ function App(): React.JSX.Element {
   };
 
   const goHomeFeed = () => {
-    const shouldRefreshNow = mode === 'feed' && category === 'home';
+    /** Already on the website-style home list — pull fresh titles. */
+    const shouldRefreshNow =
+      mode === 'feed' && category === 'home' && !homeDrilled;
     setMode('feed');
     setCategory('home');
+    setHomeDrilled(false);
+    setHomeStartIndex(0);
+    focusedArticleIdRef.current = null;
+    horizontalOffsetRef.current = 0;
     heroCollapsedRef.current = false;
     setIsHeroCollapsed(false);
-    setIsHeaderCompact(false);
-    setHeaderPinnedExpanded(false);
-    headerCompactAnim.setValue(0);
-    heroHeightAnim.setValue(heroExpanded);
+    focusHero(null);
     if (shouldRefreshNow) {
       reload();
     }
   };
 
-  const openSavedList = () => {
-    setMode('read');
-    setHeaderPinnedExpanded(false);
-    setCompactHeader(false);
-  };
-
-  const setCompactHeader = useCallback(
-    (compact: boolean) => {
-      setIsHeaderCompact(compact);
-      Animated.timing(headerCompactAnim, {
-        toValue: compact ? 1 : 0,
-        duration: 190,
-        useNativeDriver: true,
-      }).start();
+  /** Drill from the home title list into the swipe reader at `index`. */
+  const openArticleAtIndex = useCallback(
+    (index: number) => {
+      const row = items[index];
+      if (row) {
+        /**
+         * `onArticleScroll` ignores events until this matches the visible
+         * row's `item.id`. `onViewableItemsChanged` usually sets it, but that
+         * can lag one frame after the pager mounts — without this, hero
+         * collapse feels "dead" right after tapping a title.
+         */
+        focusedArticleIdRef.current = row.id;
+      }
+      setHomeStartIndex(Math.max(0, index));
+      setHomeDrilled(true);
+      setFocusedIndex(Math.max(0, index));
+      heroCollapsedRef.current = false;
+      setIsHeroCollapsed(false);
+      focusHero(row?.id ?? null);
     },
-    [headerCompactAnim],
+    [focusHero, items],
   );
 
+  /**
+   * Single place that resets feed/hero state on a category switch — shared
+   * by the burger drawer, the home page's "सबै हेर्नुहोस्" section links,
+   * and Contact Us. `articleId` (when given) drills straight to that post
+   * once its category finishes loading (see the pending-deep-link effect).
+   */
+  const selectCategory = useCallback(
+    (slug: CategoryKey, articleId?: string) => {
+      setMode('feed');
+      setCategory(slug);
+      setHomeDrilled(false);
+      setHomeStartIndex(0);
+      focusedArticleIdRef.current = null;
+      horizontalOffsetRef.current = 0;
+      heroCollapsedRef.current = false;
+      setIsHeroCollapsed(false);
+      focusHero(null);
+      if (articleId) {
+        pendingDeepLinkIdRef.current = articleId;
+      }
+    },
+    [focusHero],
+  );
+
+  useEffect(() => {
+    const handleIncomingUrl = (url: string | null) => {
+      if (url) {
+        openArticleFromUrl(url);
+      }
+    };
+    Linking.getInitialURL().then(handleIncomingUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', event => {
+      handleIncomingUrl(event.url);
+    });
+    return () => sub.remove();
+  }, [openArticleFromUrl]);
+
+  useEffect(() => {
+    const targetId = pendingDeepLinkIdRef.current;
+    if (!targetId || loading) {
+      return;
+    }
+    const idx = items.findIndex(row => row.id === targetId);
+    if (idx >= 0) {
+      pendingDeepLinkIdRef.current = null;
+      openArticleAtIndex(idx);
+      requestAnimationFrame(() => {
+        pagerRef.current?.scrollToIndex({index: idx, animated: false});
+      });
+      return;
+    }
+    if (items.length === 0) {
+      return;
+    }
+    pendingDeepLinkIdRef.current = null;
+    (async () => {
+      try {
+        const detailed = await fetchNewsDetail(targetId);
+        setReadModalArticle({
+          ...detailed,
+          bodyText: detailed.bodyText || detailed.title,
+          fetchedAt: Date.now(),
+          savedAt: Date.now(),
+        });
+      } catch {
+        /* link target unavailable offline */
+      }
+    })();
+  }, [items, loading, openArticleAtIndex]);
+
+  /** Open the in-app About/Team overlay (rendered from cached content). */
+  const openInfoOverlay = useCallback((key: InfoPageKey) => {
+    setInfoOverlay(key);
+  }, []);
+  const closeInfoOverlay = useCallback(() => setInfoOverlay(null), []);
+
+  /** After drilling in, ensure the pager lands on `homeStartIndex`. */
+  useEffect(() => {
+    if (!homeDrilled) {
+      return;
+    }
+    if (homeStartIndex <= 0) {
+      return;
+    }
+    if (data.length <= homeStartIndex) {
+      return;
+    }
+    const target = homeStartIndex;
+    /** Two ticks: FlatList needs a frame to layout after mount. */
+    const t = setTimeout(() => {
+      pagerRef.current?.scrollToIndex({index: target, animated: false});
+    }, 32);
+    return () => clearTimeout(t);
+  }, [homeDrilled, homeStartIndex, data.length]);
+
+  /** Reset the saved-article modal's hero to a safe default each time it opens a new article. */
+  useEffect(() => {
+    setReadHeroHeight(220);
+  }, [readModalArticle?.id]);
+
+  const openSavedList = () => {
+    setMode('read');
+  };
+
+  const openContactUs = useCallback(
+    () => selectCategory('contact-us'),
+    [selectCategory],
+  );
+
+  /** Opens a homepage "breaking" headline (full body already in hand) in the read overlay. */
+  const setReadModalArticleFromArticle = useCallback((article: Article) => {
+    setReadModalArticle({...article, savedAt: Date.now()});
+  }, []);
+
+  /** Un-collapse the hero once we know the article's body doesn't actually scroll. */
   const expandReadingChromeIfShortArticle = useCallback(() => {
-    setHeaderPinnedExpanded(false);
-    setCompactHeader(false);
     if (!heroCollapsedRef.current) {
       return;
     }
     heroCollapsedRef.current = false;
     setIsHeroCollapsed(false);
+    const target = resolveHeroHeight(focusedArticleIdRef.current);
+    setHeroExpanded(target);
     Animated.timing(heroHeightAnim, {
-      toValue: heroExpanded,
+      toValue: target,
       duration: 170,
       useNativeDriver: false,
     }).start();
-  }, [heroExpanded, heroHeightAnim, setCompactHeader]);
+  }, [heroHeightAnim, resolveHeroHeight]);
 
-  const onToggleNavBar = () => {
-    if (isHeaderCompact) {
-      setHeaderPinnedExpanded(true);
-      setCompactHeader(false);
+  /** Opens the side burger menu. */
+  const openDrawer = useCallback(() => {
+    setDrawerVisible(true);
+    setDrawerOpen(true);
+  }, []);
+
+  /** Closes the side burger menu (animates out, then unmounts). */
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(drawerAnim, {
+      toValue: drawerOpen ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(({finished}) => {
+      if (finished && !drawerOpen) {
+        setDrawerVisible(false);
+      }
+    });
+  }, [drawerAnim, drawerOpen]);
+
+  const goToNextArticle = (fromIndex: number) => {
+    const target = fromIndex + 1;
+    if (target < 0 || target >= data.length) {
       return;
     }
-    setHeaderPinnedExpanded(false);
-    setCompactHeader(true);
+    pagerRef.current?.scrollToIndex({index: target, animated: true});
   };
 
   const onShareArticle = async (article: Article) => {
@@ -300,28 +614,26 @@ function App(): React.JSX.Element {
       layoutH > SCROLL_CHROME_EPS && contentH > layoutH + SCROLL_CHROME_EPS;
 
     if (!canScrollVertically) {
-      if (heroCollapsedRef.current || isHeaderCompact) {
+      if (heroCollapsedRef.current) {
         expandReadingChromeIfShortArticle();
       }
       return;
     }
 
     const shouldCollapse = offsetY > 20;
-    if (offsetY < 40 && headerPinnedExpanded) {
-      setHeaderPinnedExpanded(false);
-    }
-    const shouldCompactHeader = !headerPinnedExpanded && offsetY > 95;
-    if (shouldCompactHeader !== isHeaderCompact) {
-      setCompactHeader(shouldCompactHeader);
-    }
-
     if (shouldCollapse === heroCollapsedRef.current) {
       return;
     }
     heroCollapsedRef.current = shouldCollapse;
     setIsHeroCollapsed(shouldCollapse);
+    const target = shouldCollapse
+      ? heroCollapsedReading
+      : resolveHeroHeight(focusedArticleIdRef.current);
+    if (!shouldCollapse) {
+      setHeroExpanded(target);
+    }
     Animated.timing(heroHeightAnim, {
-      toValue: shouldCollapse ? heroCollapsedReading : heroExpanded,
+      toValue: target,
       duration: 170,
       useNativeDriver: false,
     }).start();
@@ -351,37 +663,74 @@ function App(): React.JSX.Element {
     ? formatArticleMetaLine(readModalArticle)
     : '';
 
+  const currentCategoryLabel =
+    category === 'home'
+      ? 'ताजा समाचार'
+      : NEWS_CATEGORIES.find(cat => cat.slug === category)?.label ?? '';
+
+  /**
+   * First-launch takeover only. Category switches clear `data` while loading,
+   * so treating that as a full-shell splash was remounting chrome mid-nav and
+   * looking like a glitch — keep the header and show the inline splash instead.
+   */
+  if (!loading || data.length > 0 || error != null || category === 'contact-us') {
+    hasPresentedChromeRef.current = true;
+  }
+  const showInitialSplash =
+    mode === 'feed' &&
+    loading &&
+    data.length === 0 &&
+    !error &&
+    !hasPresentedChromeRef.current;
+
+  const shellPadding = {
+    paddingTop: insets.top,
+    paddingBottom: insets.bottom,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  };
+
+  if (showInitialSplash) {
+    return (
+      <>
+        <StatusBar
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={palette.background}
+          translucent={false}
+        />
+        <View style={[styles.root, shellPadding, {backgroundColor: palette.background}]}>
+          <AppSplash
+            background={palette.background}
+            accent={palette.accent}
+            secondary={palette.textSecondary}
+          />
+        </View>
+      </>
+    );
+  }
+
   return (
-    <SafeAreaProvider>
+    <>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={palette.background}
+        translucent={false}
       />
-      <SafeAreaView style={[styles.root, {backgroundColor: palette.backgroundSubtle}]}>
+      <View style={[styles.root, shellPadding, {backgroundColor: palette.backgroundSubtle}]}>
         <View
           style={[
             styles.header,
             {backgroundColor: palette.background, borderBottomColor: palette.border},
           ]}>
-          <Animated.Text
-            style={[
-              styles.headerTitle,
-              {
-                color: palette.text,
-                opacity: Animated.subtract(1, headerCompactAnim),
-                transform: [
-                  {
-                    translateY: headerCompactAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, -8],
-                    }),
-                  },
-                ],
-              },
-            ]}>
-            {APP_TITLE}
-          </Animated.Text>
           <View style={styles.headerLeft}>
+            <Pressable
+              onPress={openDrawer}
+              accessibilityRole="button"
+              accessibilityLabel="मेनु खोल्नुहोस्"
+              hitSlop={8}
+              style={styles.burgerBtn}>
+              <Text style={[styles.burgerIcon, {color: palette.text}]}>{BURGER_ICON}</Text>
+            </Pressable>
             <Pressable onPress={goHomeFeed} style={styles.homeBtn}>
               <View
                 style={[
@@ -401,32 +750,22 @@ function App(): React.JSX.Element {
                 </Text>
               </View>
             </Pressable>
-            <Animated.View style={{opacity: Animated.subtract(1, headerCompactAnim)}}>
-              <Pressable onPress={goHomeFeed}>
-                <Image source={ICON_BRAND} resizeMode="contain" style={styles.logo} />
-              </Pressable>
-            </Animated.View>
           </View>
-          <Animated.View
-            pointerEvents={isHeaderCompact ? 'auto' : 'none'}
-            style={[
-              styles.centerLogoWrap,
-              {
-                opacity: headerCompactAnim,
-                transform: [
-                  {
-                    scale: headerCompactAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.88, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}>
-            <Pressable onPress={onToggleNavBar} style={styles.centerLogoBtn}>
-              <Image source={ICON_BRAND} resizeMode="contain" style={styles.centerLogo} />
-            </Pressable>
-          </Animated.View>
+          <View pointerEvents="none" style={styles.headerTitleRow}>
+            {/* The long brand mark is the single visual identifier across
+                idioms — no "बाह्रखरी" wordmark anywhere in the chrome. One
+                base size (40) is used everywhere; `scaleFont` applies the
+                iOS / iPad multipliers so the iPad mark naturally renders
+                larger without an explicit per-idiom switch. */}
+            <Image
+              source={ICON_BRAND_LONG}
+              resizeMode="contain"
+              style={{
+                height: scaleFont(40),
+                width: Math.round(scaleFont(40) * (201 / 88)),
+              }}
+            />
+          </View>
           <View style={styles.modeRow}>
             <Pressable
               onPress={openSavedList}
@@ -475,79 +814,67 @@ function App(): React.JSX.Element {
         </View>
         {mode === 'feed' ? (
           <>
-            {isHeaderCompact ? (
-              <View style={[styles.compactRedLine, {backgroundColor: palette.accent}]} />
-            ) : (
-              <View style={[styles.categoryBar, {backgroundColor: palette.accent}]}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {NEWS_CATEGORIES.map(cat => (
-                    <Pressable
-                      key={cat.slug}
-                      onPress={() => {
-                        setCategory(cat.slug);
-                        heroCollapsedRef.current = false;
-                        setIsHeroCollapsed(false);
-                        setHeaderPinnedExpanded(false);
-                        setCompactHeader(false);
-                        heroHeightAnim.setValue(heroExpanded);
-                      }}
-                      style={[
-                        styles.catChip,
-                        styles.catChipBorderDefault,
-                        {
-                          backgroundColor:
-                            category === cat.slug ? palette.chipOn : palette.chipOff,
-                        },
-                        category === cat.slug ? {borderColor: palette.chipOn} : undefined,
-                      ]}>
-                      <Text
-                        style={[
-                          styles.catText,
-                          {
-                            color:
-                              category === cat.slug ? palette.accent : palette.onAccent,
-                          },
-                        ]}>
-                        {cat.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-            {isHeaderCompact ? (
-              <View style={styles.navLipWrap}>
-                <Pressable
-                  onPress={onToggleNavBar}
-                  style={[
-                    styles.navLipBtn,
-                    styles.navLipCompactDown,
-                    {
-                      backgroundColor: palette.accent,
-                      borderColor: palette.accent,
-                      transform: [{translateY: 0}],
-                    },
-                  ]}>
-                  <Text style={[styles.navLipArrow, {color: palette.onAccent}]}>⌄</Text>
-                </Pressable>
-              </View>
-            ) : null}
+            {/**
+             * Replaces the old animated collapsing category bar (which users
+             * reported as glitchy) with a slim, always-stable indicator that
+             * simply reopens the burger menu — all category switching now
+             * lives in the side drawer.
+             */}
+            <Pressable
+              onPress={openDrawer}
+              accessibilityRole="button"
+              accessibilityLabel="श्रेणी परिवर्तन गर्नुहोस्"
+              style={[styles.categoryIndicatorBar, {backgroundColor: palette.accent}]}>
+              <Text
+                numberOfLines={1}
+                style={[styles.categoryIndicatorText, {color: palette.onAccent}]}>
+                {currentCategoryLabel}
+              </Text>
+              <Text style={[styles.categoryIndicatorChevron, {color: palette.onAccent}]}>
+                ▾
+              </Text>
+            </Pressable>
 
-            {loading ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={palette.accent} size="large" />
-                <Text style={[styles.loading, {color: palette.textSecondary}]}>लोड हुँदैछ … (बफर {prefetchTarget})</Text>
-              </View>
+            {category === 'contact-us' ? (
+              <ContactUsView palette={palette} />
+            ) : loading ? (
+              <AppSplash
+                background={palette.background}
+                accent={palette.accent}
+                secondary={palette.textSecondary}
+              />
             ) : error ? (
               <View style={styles.center}>
                 <Text style={[styles.error, {color: palette.accent}]}>{error}</Text>
               </View>
+            ) : category === 'home' && !homeDrilled ? (
+              <HomeFeedList
+                items={data}
+                palette={palette}
+                onSelect={openArticleAtIndex}
+                onOpenLink={openInfoOverlay}
+                onOpenContact={openContactUs}
+                onRefresh={reload}
+                refreshing={loading}
+                breaking={homeSections.breaking}
+                onOpenBreaking={setReadModalArticleFromArticle}
+                sections={homeSections.sections}
+                onOpenSection={selectCategory}
+              />
             ) : (
               <FlatList
+                key={`pager-${category}`}
                 ref={pagerRef}
                 data={data}
                 horizontal
                 pagingEnabled
+                initialScrollIndex={
+                  homeDrilled &&
+                  homeStartIndex > 0 &&
+                  homeStartIndex < data.length
+                    ? homeStartIndex
+                    : undefined
+                }
                 keyExtractor={item => item.id}
                 showsHorizontalScrollIndicator={false}
                 getItemLayout={(_, i) => ({length: width, offset: width * i, index: i})}
@@ -567,8 +894,9 @@ function App(): React.JSX.Element {
                   showSwipeHint(dx > 0 ? 'next' : 'prev');
                 }}
                 scrollEventThrottle={16}
-                renderItem={({item}) => {
+                renderItem={({item, index: itemIndex}) => {
                   const savedState = isSaved(item.id);
+                  const hasNext = itemIndex < data.length - 1;
                   return (
                     <Animated.View
                       style={[
@@ -597,6 +925,10 @@ function App(): React.JSX.Element {
                               source={{uri: item.imageUrl}}
                               style={styles.heroImage}
                               resizeMode="cover"
+                              onLoad={ev => {
+                                const {width: iw, height: ih} = ev.nativeEvent.source;
+                                onHeroImageLoad(item.id, iw, ih);
+                              }}
                             />
                           ) : (
                             <View style={styles.imagePlaceholder} />
@@ -684,6 +1016,7 @@ function App(): React.JSX.Element {
                       />
                       <View style={styles.bottomPanel}>
                         <View
+                          collapsable={false}
                           style={[
                             styles.stickyMetaRow,
                             {
@@ -711,11 +1044,13 @@ function App(): React.JSX.Element {
                                   borderWidth: 0,
                                 },
                               ]}>
-                              <Image
-                                source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
-                                style={styles.articleMetaShareImg}
-                                resizeMode="contain"
-                              />
+                              <View style={styles.articleMetaIconBox}>
+                                <Image
+                                  source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
+                                  style={styles.articleMetaShareImg}
+                                  resizeMode="contain"
+                                />
+                              </View>
                             </DentArticleAction>
                             <DentArticleAction
                               onPress={() => {
@@ -738,7 +1073,7 @@ function App(): React.JSX.Element {
                                     : 'transparent',
                                 },
                               ]}>
-                              <View style={styles.articleSaveIconBox}>
+                              <View style={styles.articleMetaIconBox}>
                                 {savedState ? (
                                   <Image
                                     source={ICON_SAVE_INNER_TEMPLATE}
@@ -817,6 +1152,42 @@ function App(): React.JSX.Element {
                         )}
                         </PinchZoomArticleBody>
                         </GHScrollView>
+                        {isIPad && hasNext ? (
+                          <Pressable
+                            onPress={() => goToNextArticle(itemIndex)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Next article"
+                            hitSlop={12}
+                            style={({pressed}) => [
+                              styles.iPadNextFab,
+                              pressed ? styles.iPadNextFabPressed : null,
+                            ]}>
+                            <View
+                              style={[
+                                styles.iPadNextFabGlass,
+                                isDark
+                                  ? styles.iPadNextFabGlassDark
+                                  : styles.iPadNextFabGlassLight,
+                              ]}>
+                              <View
+                                style={[
+                                  styles.iPadNextFabHighlight,
+                                  isDark
+                                    ? styles.iPadNextFabHighlightDark
+                                    : styles.iPadNextFabHighlightLight,
+                                ]}
+                                pointerEvents="none"
+                              />
+                              <Text
+                                style={[
+                                  styles.iPadNextFabArrow,
+                                  {color: isDark ? '#F2F3F4' : '#0D1912'},
+                                ]}>
+                                {'\u203A'}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        ) : null}
                       </View>
                     </Animated.View>
                   );
@@ -873,8 +1244,18 @@ function App(): React.JSX.Element {
         <Modal
           visible={readModalArticle != null}
           animationType="slide"
+          presentationStyle="pageSheet"
           onRequestClose={() => setReadModalArticle(null)}>
-          <SafeAreaView style={[styles.readModalRoot, {backgroundColor: palette.backgroundSubtle}]}> 
+          {/**
+           * Modal is presented in its own native window, so the root
+           * `SafeAreaProvider` is unreachable. Without this wrapper the
+           * header renders under the status bar / Dynamic Island and the
+           * X / zoom controls become untappable.
+           */}
+          <SafeAreaProvider>
+            <SafeAreaView
+              edges={['top', 'right', 'left']}
+              style={[styles.readModalRoot, {backgroundColor: palette.backgroundSubtle}]}>
             <View
               style={[
                 styles.readModalHeader,
@@ -882,6 +1263,7 @@ function App(): React.JSX.Element {
               ]}>
               <Pressable
                 onPress={() => setReadModalArticle(null)}
+                hitSlop={12}
                 style={[styles.closeBtn, {borderColor: palette.border}]}> 
                 <Text style={[styles.closeText, {color: palette.text}]}>✕</Text>
               </Pressable>
@@ -941,7 +1323,22 @@ function App(): React.JSX.Element {
                   </Text>
                 ) : null}
                 {readModalArticle.imageUrl ? (
-                  <Image source={{uri: readModalArticle.imageUrl}} style={styles.readHero} />
+                  <Image
+                    source={{uri: readModalArticle.imageUrl}}
+                    style={[styles.readHero, {height: readHeroHeight}]}
+                    resizeMode="cover"
+                    onLoad={ev => {
+                      const {width: iw, height: ih} = ev.nativeEvent.source;
+                      if (!iw || !ih) {
+                        return;
+                      }
+                      const target = Math.max(
+                        160,
+                        Math.min(Math.round(height * 0.55), Math.round(width * (ih / iw))),
+                      );
+                      setReadHeroHeight(target);
+                    }}
+                  />
                 ) : null}
                 <Text
                   style={[
@@ -957,10 +1354,965 @@ function App(): React.JSX.Element {
                 </PinchZoomArticleBody>
               </GHScrollView>
             ) : null}
-          </SafeAreaView>
+            </SafeAreaView>
+          </SafeAreaProvider>
         </Modal>
-      </SafeAreaView>
-    </SafeAreaProvider>
+
+        <InfoOverlayModal
+          activeKey={infoOverlay}
+          about={infoPages.about}
+          team={infoPages.team}
+          loading={infoPages.loading}
+          online={infoPages.online}
+          error={infoPages.error}
+          onRefresh={infoPages.refresh}
+          onClose={closeInfoOverlay}
+          palette={palette}
+        />
+
+        <SideDrawer
+          visible={drawerVisible}
+          anim={drawerAnim}
+          width={Math.min(320, Math.round(width * 0.82))}
+          palette={palette}
+          category={category}
+          isHome={mode === 'feed' && category === 'home' && !homeDrilled}
+          isSaved={mode === 'read'}
+          onClose={closeDrawer}
+          onSelectHome={goHomeFeed}
+          onSelectCategory={selectCategory}
+          onSelectSaved={openSavedList}
+          onSelectInfo={openInfoOverlay}
+        />
+      </View>
+    </>
+  );
+}
+
+type HomePalette = {
+  background: string;
+  backgroundSubtle: string;
+  card: string;
+  border: string;
+  text: string;
+  textSecondary: string;
+  accent: string;
+  onAccent: string;
+  mutedBtn: string;
+};
+
+/** Single tappable row inside {@link SideDrawer}. */
+function DrawerItem({
+  label,
+  active,
+  palette,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  palette: HomePalette;
+  onPress: () => void;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({pressed}) => [
+        styles.drawerItem,
+        {
+          backgroundColor: active ? palette.mutedBtn : 'transparent',
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}>
+      <View
+        style={[
+          styles.drawerItemDot,
+          {backgroundColor: active ? palette.accent : 'transparent'},
+        ]}
+      />
+      <Text
+        style={[
+          styles.drawerItemText,
+          {color: active ? palette.accent : palette.text, fontWeight: active ? '800' : '600'},
+        ]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Simple side burger menu — replaces the old collapsing category chip bar.
+ * All primary navigation (categories, saved articles, About/Team) lives
+ * here so the header itself never has to expand/collapse.
+ */
+function SideDrawer({
+  visible,
+  anim,
+  width,
+  palette,
+  category,
+  isHome,
+  isSaved,
+  onClose,
+  onSelectHome,
+  onSelectCategory,
+  onSelectSaved,
+  onSelectInfo,
+}: {
+  visible: boolean;
+  anim: Animated.Value;
+  width: number;
+  palette: HomePalette;
+  category: CategoryKey;
+  isHome: boolean;
+  isSaved: boolean;
+  onClose: () => void;
+  onSelectHome: () => void;
+  onSelectCategory: (slug: CategoryKey) => void;
+  onSelectSaved: () => void;
+  onSelectInfo: (key: InfoPageKey) => void;
+}): React.JSX.Element {
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      {/** Modal is a separate native window — nest a provider so top inset is real. */}
+      <SafeAreaProvider>
+        <View style={styles.drawerRoot}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.drawerOverlay, {opacity: anim}]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="मेनु बन्द गर्नुहोस्"
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.drawerPanel,
+              {
+                width,
+                backgroundColor: palette.background,
+                transform: [
+                  {
+                    translateX: anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-width, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <SafeAreaView edges={['top', 'bottom', 'left']} style={styles.drawerSafeArea}>
+              <View style={[styles.drawerHeader, {borderBottomColor: palette.border}]}>
+                <Image
+                  source={ICON_BRAND_LONG}
+                  resizeMode="contain"
+                  style={styles.drawerBrand}
+                />
+                <Pressable
+                  onPress={onClose}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="बन्द गर्नुहोस्"
+                  style={[styles.closeBtn, {borderColor: palette.border}]}>
+                  <Text style={[styles.closeText, {color: palette.text}]}>✕</Text>
+                </Pressable>
+              </View>
+              <ScrollView contentContainerStyle={styles.drawerBody}>
+                <DrawerItem
+                  label="ताजा समाचार"
+                  active={isHome}
+                  palette={palette}
+                  onPress={() => {
+                    onSelectHome();
+                    onClose();
+                  }}
+                />
+                <View style={[styles.drawerDivider, {backgroundColor: palette.border}]} />
+                {NEWS_CATEGORIES.map(cat => (
+                  <DrawerItem
+                    key={cat.slug}
+                    label={cat.label}
+                    active={category === cat.slug}
+                    palette={palette}
+                    onPress={() => {
+                      onSelectCategory(cat.slug);
+                      onClose();
+                    }}
+                  />
+                ))}
+                <View style={[styles.drawerDivider, {backgroundColor: palette.border}]} />
+                <DrawerItem
+                  label="सुरक्षित लेखहरू"
+                  active={isSaved}
+                  palette={palette}
+                  onPress={() => {
+                    onSelectSaved();
+                    onClose();
+                  }}
+                />
+                <DrawerItem
+                  label="हाम्रो बारेमा"
+                  active={false}
+                  palette={palette}
+                  onPress={() => {
+                    onSelectInfo('about');
+                    onClose();
+                  }}
+                />
+                <DrawerItem
+                  label="हाम्रो टिम"
+                  active={false}
+                  palette={palette}
+                  onPress={() => {
+                    onSelectInfo('team');
+                    onClose();
+                  }}
+                />
+              </ScrollView>
+            </SafeAreaView>
+          </Animated.View>
+        </View>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+/**
+ * Full-screen in-app modal that renders the parsed About / Team content.
+ * Content is supplied by `useInfoPages`, which serves cached results
+ * instantly (offline-friendly) and refreshes in the background.
+ */
+function InfoOverlayModal({
+  activeKey,
+  about,
+  team,
+  loading,
+  online,
+  error,
+  onRefresh,
+  onClose,
+  palette,
+}: {
+  activeKey: InfoPageKey | null;
+  about: import('./src/types/infoPages').AboutContent | undefined;
+  team: import('./src/types/infoPages').TeamContent | undefined;
+  loading: boolean;
+  online: boolean;
+  error: string | null;
+  onRefresh: () => void;
+  onClose: () => void;
+  palette: HomePalette;
+}): React.JSX.Element {
+  const visible = activeKey != null;
+  const content = activeKey === 'team' ? team : about;
+  const fallbackTitle =
+    activeKey === 'team' ? 'हाम्रो टिम' : 'हाम्रो बारेमा';
+  const title = content?.heading || fallbackTitle;
+  const showEmpty = !loading && !content;
+  const refreshLabel = online
+    ? 'ताजा गर्नुहोस्'
+    : error
+    ? 'पुनः कोसिस गर्नुहोस्'
+    : 'ताजा गर्नुहोस्';
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}>
+      {/** See note on the saved-article modal: Modal needs its own provider. */}
+      <SafeAreaProvider>
+        <SafeAreaView
+          edges={['top', 'right', 'left']}
+          style={[styles.readModalRoot, {backgroundColor: palette.backgroundSubtle}]}>
+        <View
+          style={[
+            styles.readModalHeader,
+            {borderBottomColor: palette.border, backgroundColor: palette.background},
+          ]}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={[styles.closeBtn, {borderColor: palette.border}]}>
+            <Text style={[styles.closeText, {color: palette.text}]}>✕</Text>
+          </Pressable>
+          <Text
+            numberOfLines={1}
+            style={[styles.infoModalTitle, {color: palette.text}]}>
+            {title}
+          </Text>
+          <Pressable
+            onPress={onRefresh}
+            style={[
+              styles.infoRefreshBtn,
+              {borderColor: palette.border, backgroundColor: palette.background},
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={refreshLabel}>
+            <Text style={[styles.infoRefreshTxt, {color: palette.accent}]}>↻</Text>
+          </Pressable>
+        </View>
+        {!online && content ? (
+          <View
+            style={[styles.infoOfflineBanner, {backgroundColor: palette.mutedBtn}]}>
+            <Text style={[styles.infoOfflineTxt, {color: palette.textSecondary}]}>
+              अफलाइन दृश्य — स्थानीय बफरबाट देखाइँदै
+            </Text>
+          </View>
+        ) : null}
+        {loading && !content ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={palette.accent} />
+            <Text style={[styles.loading, {color: palette.textSecondary}]}>
+              लोड हुँदैछ …
+            </Text>
+          </View>
+        ) : showEmpty ? (
+          <View style={styles.center}>
+            <Text style={[styles.error, {color: palette.accent}]}>
+              {error ?? 'सामग्री उपलब्ध छैन ।'}
+            </Text>
+          </View>
+        ) : activeKey === 'team' && team ? (
+          <ScrollView contentContainerStyle={styles.infoModalBody}>
+            {team.categories.map(cat => (
+              <View key={cat.title} style={styles.teamCategoryBlock}>
+                <View
+                  style={[
+                    styles.teamCategoryHeader,
+                    {backgroundColor: palette.accent},
+                  ]}>
+                  <Text
+                    style={[
+                      styles.teamCategoryHeaderText,
+                      {color: palette.onAccent},
+                    ]}>
+                    {cat.title}
+                  </Text>
+                </View>
+                <View style={styles.teamMemberGrid}>
+                  {cat.members.map(member => (
+                    <View
+                      key={`${cat.title}-${member.name}`}
+                      style={[
+                        styles.teamMemberCard,
+                        {
+                          backgroundColor: palette.background,
+                          borderColor: palette.border,
+                        },
+                      ]}>
+                      {member.imageUrl ? (
+                        <Image
+                          source={{uri: member.imageUrl}}
+                          style={[
+                            styles.teamMemberPhoto,
+                            {backgroundColor: palette.backgroundSubtle},
+                          ]}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.teamMemberPhoto,
+                            {backgroundColor: palette.backgroundSubtle},
+                          ]}
+                        />
+                      )}
+                      <Text
+                        style={[styles.teamMemberName, {color: palette.text}]}
+                        numberOfLines={2}>
+                        {member.name}
+                      </Text>
+                      {member.role ? (
+                        <Text
+                          style={[
+                            styles.teamMemberRole,
+                            {color: palette.textSecondary},
+                          ]}
+                          numberOfLines={2}>
+                          {member.role}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : about ? (
+          <ScrollView contentContainerStyle={styles.infoModalBody}>
+            {about.paragraphs.map((p, i) => (
+              <Text
+                key={`about-${i}`}
+                style={[styles.infoParagraph, {color: palette.text}]}>
+                {p}
+              </Text>
+            ))}
+          </ScrollView>
+        ) : null}
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+/**
+ * Website-style home view: red "ताजा समाचार" section header, a list of
+ * latest titles (with thumbnail when hydrated), then a footer with Contact,
+ * About, and Team links.
+ */
+function HomeFeedList({
+  items,
+  palette,
+  onSelect,
+  onOpenLink,
+  onOpenContact,
+  onRefresh,
+  refreshing,
+  breaking,
+  onOpenBreaking,
+  sections,
+  onOpenSection,
+}: {
+  items: Article[];
+  palette: HomePalette;
+  onSelect: (index: number) => void;
+  onOpenLink: (key: InfoPageKey) => void;
+  onOpenContact: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  breaking: Article[];
+  onOpenBreaking: (article: Article) => void;
+  sections: HomeCategorySection[];
+  onOpenSection: (slug: CategoryKey, articleId?: string) => void;
+}): React.JSX.Element {
+  const renderBreakingCard = useCallback(
+    ({item}: {item: Article}) => (
+      <Pressable
+        onPress={() => onOpenBreaking(item)}
+        accessibilityRole="button"
+        accessibilityLabel={item.title}
+        style={({pressed}) => [
+          styles.breakingCard,
+          {backgroundColor: palette.card, borderColor: palette.border, opacity: pressed ? 0.8 : 1},
+        ]}>
+        {item.imageUrl ? (
+          <Image
+            source={{uri: item.imageUrl}}
+            style={[styles.breakingCardThumb, {backgroundColor: palette.backgroundSubtle}]}
+            resizeMode="cover"
+          />
+        ) : (
+          <View
+            style={[styles.breakingCardThumb, {backgroundColor: palette.backgroundSubtle}]}
+          />
+        )}
+        <Text
+          style={[styles.breakingCardTitle, {color: palette.text}]}
+          numberOfLines={3}>
+          {item.title}
+        </Text>
+      </Pressable>
+    ),
+    [onOpenBreaking, palette.backgroundSubtle, palette.border, palette.card, palette.text],
+  );
+
+  const renderItem = useCallback(
+    ({item, index}: {item: Article; index: number}) => {
+      const hasThumb = !!item.imageUrl;
+      const meta = formatArticleMetaLine(item);
+      return (
+        <Pressable
+          onPress={() => onSelect(index)}
+          accessibilityRole="button"
+          accessibilityLabel={item.title}
+          style={({pressed}) => [
+            styles.homeRow,
+            {
+              backgroundColor: palette.background,
+              borderBottomColor: palette.border,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}>
+          {hasThumb ? (
+            <Image
+              source={{uri: item.imageUrl}}
+              style={[styles.homeRowThumb, {backgroundColor: palette.backgroundSubtle}]}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={[styles.homeRowThumb, {backgroundColor: palette.backgroundSubtle}]}
+            />
+          )}
+          <View style={styles.homeRowTextWrap}>
+            <Text
+              style={[styles.homeRowTitle, {color: palette.text}]}
+              numberOfLines={3}>
+              {item.title}
+            </Text>
+            {meta.length > 0 ? (
+              <Text
+                style={[styles.homeRowMeta, {color: palette.textSecondary}]}
+                numberOfLines={1}>
+                {meta}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+      );
+    },
+    [onSelect, palette.background, palette.backgroundSubtle, palette.border, palette.text, palette.textSecondary],
+  );
+
+  return (
+    <FlatList
+      data={items}
+      keyExtractor={item => item.id}
+      contentContainerStyle={styles.homeListContent}
+      ItemSeparatorComponent={null}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      ListHeaderComponent={
+        <>
+          {breaking.length > 0 ? (
+            <View style={styles.breakingWrap}>
+              <View style={[styles.homeSectionHeader, {backgroundColor: palette.accent}]}>
+                <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+                  ब्रेकिंग
+                </Text>
+              </View>
+              <FlatList
+                data={breaking}
+                keyExtractor={item => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.breakingListContent}
+                renderItem={renderBreakingCard}
+              />
+            </View>
+          ) : null}
+          <View style={[styles.homeSectionHeader, {backgroundColor: palette.accent}]}>
+            <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+              ताजा समाचार
+            </Text>
+          </View>
+        </>
+      }
+      ListEmptyComponent={
+        <View style={styles.center}>
+          <Text style={[styles.loading, {color: palette.textSecondary}]}>
+            लोड हुँदैछ …
+          </Text>
+        </View>
+      }
+      ListFooterComponent={
+        <View style={styles.homeFooterWrap}>
+          {sections.map(section =>
+            section.items.length === 0 ? null : (
+              <View key={section.slug}>
+                <Pressable
+                  onPress={() => onOpenSection(section.slug)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${section.label} — सबै हेर्नुहोस्`}
+                  style={[
+                    styles.homeSectionHeader,
+                    styles.homeSectionHeaderFooter,
+                    styles.homeSectionHeaderRow,
+                    {backgroundColor: palette.accent},
+                  ]}>
+                  <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+                    {section.label}
+                  </Text>
+                  <Text style={[styles.homeSectionSeeAllText, {color: palette.onAccent}]}>
+                    सबै हेर्नुहोस् {'\u203A'}
+                  </Text>
+                </Pressable>
+                {section.items.map(item => {
+                  const meta = formatArticleMetaLine(item);
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => onOpenSection(section.slug, item.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.title}
+                      style={({pressed}) => [
+                        styles.homeRow,
+                        {
+                          backgroundColor: palette.background,
+                          borderBottomColor: palette.border,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}>
+                      {item.imageUrl ? (
+                        <Image
+                          source={{uri: item.imageUrl}}
+                          style={[
+                            styles.homeRowThumb,
+                            {backgroundColor: palette.backgroundSubtle},
+                          ]}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.homeRowThumb,
+                            {backgroundColor: palette.backgroundSubtle},
+                          ]}
+                        />
+                      )}
+                      <View style={styles.homeRowTextWrap}>
+                        <Text
+                          style={[styles.homeRowTitle, {color: palette.text}]}
+                          numberOfLines={3}>
+                          {item.title}
+                        </Text>
+                        {meta.length > 0 ? (
+                          <Text
+                            style={[styles.homeRowMeta, {color: palette.textSecondary}]}
+                            numberOfLines={1}>
+                            {meta}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ),
+          )}
+          {/**
+           * Google Play (News and Magazines policy) requires a clearly
+           * visible, easy-to-find front-page Contact Us link on Android —
+           * see docs/play-store/NEWS_POLICY_COMPLIANCE.md. iOS has no such
+           * requirement and keeps Contact Us in the burger menu only, so
+           * this front-page section is Android-only.
+           */}
+          {Platform.OS === 'android' ? (
+            <>
+              <View
+                style={[
+                  styles.homeSectionHeader,
+                  styles.homeSectionHeaderFooter,
+                  {backgroundColor: palette.accent},
+                ]}>
+                <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+                  Contact Us
+                </Text>
+              </View>
+              <Pressable
+                onPress={onOpenContact}
+                accessibilityRole="link"
+                accessibilityLabel="Contact Us"
+                style={({pressed}) => [
+                  styles.homeFooterLink,
+                  styles.homeFooterContactLink,
+                  {
+                    backgroundColor: palette.background,
+                    borderBottomColor: palette.border,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}>
+                <View style={styles.homeFooterContactTextWrap}>
+                  <Text style={[styles.homeFooterLinkText, {color: palette.text}]}>
+                    Contact Us
+                  </Text>
+                  <Text style={[styles.homeFooterContactMeta, {color: palette.textSecondary}]}>
+                    {nepaliDigitsToAscii(FOOTER_INFO.contact.phones[0])} ·{' '}
+                    {FOOTER_INFO.contact.emails[0]}
+                  </Text>
+                </View>
+                <Text style={[styles.homeFooterLinkArrow, {color: palette.accent}]}>
+                  {'\u203A'}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
+          <View
+            style={[
+              styles.homeSectionHeader,
+              styles.homeSectionHeaderFooter,
+              {backgroundColor: palette.accent},
+            ]}>
+            <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+              About
+            </Text>
+          </View>
+          {INFO_LINKS.map(link => (
+            <Pressable
+              key={link.key}
+              onPress={() => onOpenLink(link.key)}
+              accessibilityRole="link"
+              accessibilityLabel={link.label}
+              style={({pressed}) => [
+                styles.homeFooterLink,
+                {
+                  backgroundColor: palette.background,
+                  borderBottomColor: palette.border,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}>
+              <Text style={[styles.homeFooterLinkText, {color: palette.text}]}>
+                {link.label}
+              </Text>
+              <Text
+                style={[styles.homeFooterLinkArrow, {color: palette.accent}]}>
+                {'\u203A'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      }
+      renderItem={renderItem}
+    />
+  );
+}
+
+/**
+ * Dedicated in-app Contact Us page (News policy). Phone, email, and address
+ * match https://baahrakhari.com/contact
+ */
+function ContactUsView({
+  palette,
+}: {
+  palette: HomePalette;
+}): React.JSX.Element {
+  const dial = useCallback(async (phone: string) => {
+    const tel = `tel:${nepaliDigitsToAscii(phone).replace(/[^\d+]/g, '')}`;
+    try {
+      await Linking.openURL(tel);
+    } catch {
+      /* device has no Phone app */
+    }
+  }, []);
+  const mail = useCallback(async (email: string) => {
+    try {
+      await Linking.openURL(`mailto:${email}`);
+    } catch {
+      /* device has no mail client configured */
+    }
+  }, []);
+  const openWeb = useCallback(async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      /* no browser available */
+    }
+  }, []);
+
+  const renderContactBlocks = (info: ContactBlocksContent, keyPrefix: string) => (
+    <>
+      <View
+        style={[
+          styles.footerBlock,
+          {backgroundColor: palette.background, borderColor: palette.border},
+        ]}>
+        <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+          {info.contact.title}
+        </Text>
+        {info.contact.phones.map(phone => (
+          <Pressable
+            key={`${keyPrefix}-phone-${phone}`}
+            onPress={() => dial(phone)}
+            hitSlop={6}>
+            <Text style={[styles.footerLinkText, {color: palette.text}]}>
+              {phone}
+            </Text>
+          </Pressable>
+        ))}
+        {info.contact.emails.map(email => (
+          <Pressable
+            key={`${keyPrefix}-email-${email}`}
+            onPress={() => mail(email)}
+            hitSlop={6}>
+            <Text style={[styles.footerLinkText, {color: palette.text}]}>
+              {email}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View
+        style={[
+          styles.footerBlock,
+          {backgroundColor: palette.background, borderColor: palette.border},
+        ]}>
+        <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+          {info.address.title}
+        </Text>
+        {info.address.lines.map(line => (
+          <Text
+            key={`${keyPrefix}-addr-${line}`}
+            style={[styles.footerBlockText, {color: palette.text}]}>
+            {line}
+          </Text>
+        ))}
+      </View>
+
+      <View
+        style={[
+          styles.footerBlock,
+          {backgroundColor: palette.background, borderColor: palette.border},
+        ]}>
+        <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+          {info.marketing.title}
+        </Text>
+        {info.marketing.phones.map(phone => (
+          <Pressable
+            key={`${keyPrefix}-mkt-phone-${phone}`}
+            onPress={() => dial(phone)}
+            hitSlop={6}>
+            <Text style={[styles.footerLinkText, {color: palette.text}]}>
+              {phone}
+            </Text>
+          </Pressable>
+        ))}
+        {info.marketing.emails.map(email => (
+          <Pressable
+            key={`${keyPrefix}-mkt-email-${email}`}
+            onPress={() => mail(email)}
+            hitSlop={6}>
+            <Text style={[styles.footerLinkText, {color: palette.text}]}>
+              {email}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.footerRow}>
+        <View
+          style={[
+            styles.footerBlock,
+            styles.footerBlockHalf,
+            {backgroundColor: palette.background, borderColor: palette.border},
+          ]}>
+          <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+            {info.editor.title}
+          </Text>
+          <Text style={[styles.footerBlockText, {color: palette.text}]}>
+            {info.editor.name}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.footerBlock,
+            styles.footerBlockHalf,
+            {backgroundColor: palette.background, borderColor: palette.border},
+          ]}>
+          <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+            {info.director.title}
+          </Text>
+          <Text style={[styles.footerBlockText, {color: palette.text}]}>
+            {info.director.name}
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.footerBlock,
+          {backgroundColor: palette.background, borderColor: palette.border},
+        ]}>
+        <Text style={[styles.footerBlockTitle, {color: palette.accent}]}>
+          {info.social.title}
+        </Text>
+        <View style={styles.footerSocialRow}>
+          {info.social.links.map(link => (
+            <Pressable
+              key={`${keyPrefix}-social-${link.label}`}
+              onPress={() => openWeb(link.url)}
+              accessibilityRole="link"
+              accessibilityLabel={link.label}
+              style={({pressed}) => [
+                styles.footerSocialBtn,
+                {
+                  backgroundColor: palette.accent,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}>
+              <Text style={[styles.footerSocialTxt, {color: palette.onAccent}]}>
+                {link.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </>
+  );
+
+  return (
+    <ScrollView
+      contentContainerStyle={[
+        styles.contactUsRoot,
+        {backgroundColor: palette.backgroundSubtle},
+      ]}>
+      <View style={[styles.contactUsBanner, {backgroundColor: palette.accent}]}>
+        <Text style={[styles.contactUsBannerTitle, {color: palette.onAccent}]}>
+          Contact Us
+        </Text>
+        <Text style={[styles.contactUsBannerSub, {color: palette.onAccent}]}>
+          {APP_PUBLISHER.legalName}
+        </Text>
+        <Text style={[styles.contactUsBannerSub, {color: palette.onAccent}]}>
+          {APP_PUBLISHER.legalNameNepali}
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.contactUsPrimaryCard,
+          {backgroundColor: palette.background, borderColor: palette.border},
+        ]}>
+        <Text style={[styles.contactUsPrimaryLabel, {color: palette.accent}]}>
+          {CONTACT_INFO_EN.contact.title}
+        </Text>
+        {CONTACT_INFO_EN.contact.phones.map(phone => (
+          <Pressable key={`primary-phone-${phone}`} onPress={() => dial(phone)} hitSlop={6}>
+            <Text style={[styles.contactUsPrimaryValue, {color: palette.text}]}>
+              {phone}
+            </Text>
+          </Pressable>
+        ))}
+        {CONTACT_INFO_EN.contact.emails.map(email => (
+          <Pressable key={`primary-email-${email}`} onPress={() => mail(email)} hitSlop={6}>
+            <Text style={[styles.contactUsPrimaryValue, {color: palette.text}]}>
+              {email}
+            </Text>
+          </Pressable>
+        ))}
+        <Pressable onPress={() => openWeb(SITE_CONTACT_URL)} hitSlop={6}>
+          <Text style={[styles.contactUsWebLink, {color: palette.accent}]}>
+            {CONTACT_INFO_EN.websiteLabel}: {SITE_CONTACT_URL}
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={[styles.contactUsSubheading, {color: palette.textSecondary}]}>
+        सम्पर्क गर्नुहोस्
+      </Text>
+      <Text style={[styles.contactUsIntro, {color: palette.textSecondary}]}>
+        बाह्रखरीसँग फोन, इमेल वा कार्यालयमा सम्पर्क गर्नुहोस् ।
+      </Text>
+
+      {renderContactBlocks(FOOTER_INFO, 'ne')}
+
+      <View
+        style={[
+          styles.contactUsDivider,
+          {borderColor: palette.border, backgroundColor: palette.background},
+        ]}>
+        <Text style={[styles.contactUsDividerText, {color: palette.accent}]}>
+          {CONTACT_INFO_EN.pageTitle} (English)
+        </Text>
+      </View>
+      <Text style={[styles.contactUsIntro, {color: palette.textSecondary}]}>
+        {CONTACT_INFO_EN.intro}
+      </Text>
+
+      {renderContactBlocks(CONTACT_INFO_EN, 'en')}
+    </ScrollView>
   );
 }
 
@@ -975,27 +2327,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 2},
-  centerLogoWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 2},
+  burgerBtn: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
   },
-  centerLogoBtn: {alignItems: 'center', justifyContent: 'center'},
-  centerLogo: {height: 42, width: 42, borderRadius: 10},
-  headerTitle: {
+  burgerIcon: {fontSize: scaleFont(20), fontWeight: '700'},
+  headerTitleRow: {
     position: 'absolute',
     left: 0,
     right: 0,
-    textAlign: 'center',
-    fontSize: 30,
-    fontWeight: '800',
     top: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  logo: {height: 32, width: 32, borderRadius: 8},
   homeBtn: {
     width: 34,
     height: 34,
@@ -1011,31 +2359,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  homeIcon: {fontSize: 20, fontWeight: '800'},
-  navLipWrap: {
-    alignItems: 'center',
-    height: 0,
-    overflow: 'visible',
-    zIndex: 4,
-  },
-  navLipBtn: {
-    width: 128,
-    height: 22,
-    borderWidth: 1,
+  homeIcon: {fontSize: scaleFont(20), fontWeight: '800'},
+  /** Slim, static replacement for the old animated collapsing category bar. */
+  categoryIndicatorBar: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  navLipExpanded: {
-    borderTopWidth: 1,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-  },
-  navLipCompactDown: {
-    borderTopWidth: 1,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-  },
-  navLipArrow: {fontSize: 15, fontWeight: '900'},
+  categoryIndicatorText: {fontWeight: '800', fontSize: scaleFont(14)},
+  categoryIndicatorChevron: {fontSize: scaleFont(12), fontWeight: '800'},
   modeRow: {flexDirection: 'row', gap: 10, alignItems: 'center'},
   modeBtn: {
     borderRadius: 999,
@@ -1057,24 +2392,43 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   themeIcon: {width: 24, height: 24},
-  categoryBar: {
-    backgroundColor: Colors.accent,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+  /** Side burger menu */
+  drawerRoot: {flex: 1, flexDirection: 'row'},
+  drawerOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  compactRedLine: {
-    height: 3,
-    width: '100%',
+  drawerPanel: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: {width: 4, height: 0},
+    elevation: 12,
   },
-  catChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginRight: 8,
+  drawerSafeArea: {flex: 1},
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  catChipBorderDefault: {borderColor: 'rgba(255,255,255,0.45)'},
-  catText: {fontWeight: '700'},
+  drawerBrand: {height: 30, width: Math.round(30 * (201 / 88))},
+  drawerBody: {paddingVertical: 8, paddingBottom: 24},
+  drawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  drawerItemDot: {width: 6, height: 6, borderRadius: 3},
+  drawerItemText: {fontSize: scaleFont(16)},
+  drawerDivider: {height: StyleSheet.hairlineWidth, marginVertical: 6},
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   loading: {marginTop: 10, color: Colors.textSecondary},
   error: {color: Colors.accent, textAlign: 'center', paddingHorizontal: 20},
@@ -1090,7 +2444,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   heroTitleReading: {
-    fontSize: 17,
+    fontSize: scaleFont(17),
     fontWeight: '800',
     textAlign: 'center',
   },
@@ -1130,25 +2484,24 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(4,7,7,0.16)',
     marginBottom: 6,
   },
-  imageControlTxt: {fontSize: 18, fontWeight: '800', color: '#040707'},
-  /** Seamless row — PNGs are transparent; row background shows through */
+  imageControlTxt: {fontSize: scaleFont(18), fontWeight: '800', color: '#040707'},
+  /** Meta row actions — clip icon layers so hero images cannot bleed through on Android */
   articleMetaAction: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
-  /** Share glyph scaled down (~70%) vs save for visual balance */
   articleMetaShareImg: {
-    width: '100%',
-    height: '100%',
-    transform: [{scale: 0.7}],
+    width: ARTICLE_SHARE_ICON_SIZE,
+    height: ARTICLE_SHARE_ICON_SIZE,
   },
-  articleSaveIconBox: {
+  articleMetaIconBox: {
     width: ARTICLE_SAVE_ICON_BOX,
     height: ARTICLE_SAVE_ICON_BOX,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   /** Accent fill — same footprint as stroke; drawn beneath */
   articleSaveInnerLayer: {
@@ -1163,7 +2516,7 @@ const styles = StyleSheet.create({
     height: ARTICLE_SAVE_ICON_BOX,
     transform: [{scale: 1.14}],
   },
-  heroTitle: {color: '#fff', fontSize: 18, fontWeight: '800'},
+  heroTitle: {color: '#fff', fontSize: scaleFont(18), fontWeight: '800'},
   adSpacer: {
     height: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1208,13 +2561,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
+    zIndex: 2,
+    ...(Platform.OS === 'android' ? {elevation: 2} : null),
   },
   authorInline: {marginBottom: 0, flex: 1},
-  fontBtnTxt: {fontSize: 18, fontWeight: '800'},
+  fontBtnTxt: {fontSize: scaleFont(18), fontWeight: '800'},
   bodyWrap: {padding: 14, paddingBottom: 80},
-  title: {fontSize: 22, fontWeight: '800', color: Colors.text, marginBottom: 10},
-  author: {fontSize: 13, color: Colors.textSecondary, marginBottom: 12},
-  body: {fontSize: 17, lineHeight: 29, color: Colors.text},
+  title: {fontSize: scaleFont(22), fontWeight: '800', color: Colors.text, marginBottom: 10},
+  author: {fontSize: scaleFont(13), color: Colors.textSecondary, marginBottom: 12},
+  body: {fontSize: scaleFont(17), lineHeight: scaleFont(29), color: Colors.text},
   inlineLoading: {flexDirection: 'row', alignItems: 'center', gap: 8},
   loadingInline: {color: Colors.textSecondary},
   navArrowBtnDisabled: {opacity: 0.35},
@@ -1236,7 +2591,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: Colors.card,
   },
-  savedTitle: {flex: 1, color: Colors.text, fontSize: 16, fontWeight: '700'},
+  savedTitle: {flex: 1, color: Colors.text, fontSize: scaleFont(16), fontWeight: '700'},
   unsaveBtn: {
     borderWidth: 0,
     borderRadius: 8,
@@ -1285,6 +2640,374 @@ const styles = StyleSheet.create({
   closeText: {fontWeight: '800', color: Colors.text},
   readBodyWrap: {padding: 14, paddingBottom: 40},
   readHero: {width: '100%', height: 220, borderRadius: 8, marginBottom: 12},
+  /**
+   * iPadOS-only floating "Next article" control. Approximates iOS 26
+   * Liquid Glass with a translucent fill, bright inner highlight ring,
+   * and soft drop shadow — readable on light hero images, body copy,
+   * or dark theme alike.
+   */
+  iPadNextFab: {
+    position: 'absolute',
+    right: 18,
+    bottom: 44,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    shadowOffset: {width: 0, height: 6},
+    elevation: 8,
+    zIndex: 6,
+  },
+  iPadNextFabPressed: {
+    transform: [{scale: 0.94}],
+    shadowOpacity: 0.18,
+  },
+  iPadNextFabGlass: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  iPadNextFabGlassLight: {
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  iPadNextFabGlassDark: {
+    backgroundColor: 'rgba(28,32,36,0.55)',
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  iPadNextFabHighlight: {
+    position: 'absolute',
+    top: 3,
+    left: 6,
+    right: 6,
+    height: 22,
+    borderRadius: 18,
+  },
+  iPadNextFabHighlightLight: {
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  iPadNextFabHighlightDark: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  iPadNextFabArrow: {
+    fontSize: 38,
+    fontWeight: '700',
+    lineHeight: 40,
+    marginTop: -2,
+    marginLeft: 4,
+  },
+  homeListContent: {
+    paddingBottom: 36,
+  },
+  homeSectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: isIPad ? 14 : 10,
+  },
+  homeSectionHeaderFooter: {
+    marginTop: 22,
+  },
+  homeSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  homeSectionSeeAllText: {
+    fontWeight: '700',
+    fontSize: scaleFont(isIPad ? 14 : 12),
+  },
+  homeSectionHeaderText: {
+    fontWeight: '800',
+    fontSize: scaleFont(isIPad ? 22 : 18),
+    letterSpacing: 0.2,
+  },
+  breakingWrap: {
+    marginBottom: 4,
+  },
+  breakingListContent: {
+    paddingHorizontal: isIPad ? 18 : 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  breakingCard: {
+    width: isIPad ? 220 : 168,
+    marginRight: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  breakingCardThumb: {
+    width: '100%',
+    height: isIPad ? 130 : 96,
+  },
+  breakingCardTitle: {
+    padding: 8,
+    fontSize: scaleFont(isIPad ? 15 : 13),
+    fontWeight: '700',
+    lineHeight: scaleFont(isIPad ? 21 : 18),
+  },
+  homeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: isIPad ? 22 : 14,
+    paddingVertical: isIPad ? 16 : 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: isIPad ? 16 : 12,
+  },
+  homeRowThumb: {
+    width: isIPad ? 110 : 72,
+    height: isIPad ? 80 : 56,
+    borderRadius: 8,
+  },
+  homeRowTextWrap: {
+    flex: 1,
+    minHeight: isIPad ? 80 : 56,
+    justifyContent: 'center',
+  },
+  homeRowTitle: {
+    fontSize: scaleFont(isIPad ? 19 : 16),
+    fontWeight: '700',
+    lineHeight: scaleFont(isIPad ? 27 : 22),
+  },
+  homeRowMeta: {
+    marginTop: 4,
+    fontSize: scaleFont(12),
+  },
+  homeFooterWrap: {
+    marginTop: 0,
+  },
+  homeFooterLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: isIPad ? 24 : 18,
+    paddingVertical: isIPad ? 20 : 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  homeFooterLinkText: {
+    fontSize: scaleFont(isIPad ? 19 : 17),
+    fontWeight: '700',
+  },
+  homeFooterLinkArrow: {
+    fontSize: scaleFont(isIPad ? 28 : 22),
+    fontWeight: '800',
+  },
+  homeFooterContactLink: {
+    alignItems: 'flex-start',
+  },
+  homeFooterContactTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  homeFooterContactMeta: {
+    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontWeight: '600',
+  },
+  contactUsRoot: {
+    flexGrow: 1,
+    paddingHorizontal: isIPad ? 32 : 16,
+    paddingVertical: isIPad ? 28 : 18,
+    gap: isIPad ? 18 : 14,
+  },
+  contactUsHeading: {
+    fontSize: scaleFont(isIPad ? 26 : 22),
+    fontWeight: '800',
+    marginBottom: isIPad ? 2 : 0,
+  },
+  contactUsBanner: {
+    borderRadius: 14,
+    paddingHorizontal: isIPad ? 22 : 16,
+    paddingVertical: isIPad ? 20 : 16,
+    marginBottom: isIPad ? 14 : 10,
+  },
+  contactUsBannerTitle: {
+    fontSize: scaleFont(isIPad ? 28 : 24),
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  contactUsBannerSub: {
+    fontSize: scaleFont(isIPad ? 15 : 13),
+    fontWeight: '600',
+    opacity: 0.95,
+  },
+  contactUsPrimaryCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: isIPad ? 20 : 16,
+    paddingVertical: isIPad ? 18 : 14,
+    marginBottom: isIPad ? 12 : 8,
+    gap: 6,
+  },
+  contactUsPrimaryLabel: {
+    fontSize: scaleFont(isIPad ? 17 : 15),
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  contactUsPrimaryValue: {
+    fontSize: scaleFont(isIPad ? 18 : 16),
+    fontWeight: '700',
+  },
+  contactUsWebLink: {
+    marginTop: 8,
+    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontWeight: '700',
+  },
+  contactUsSubheading: {
+    fontSize: scaleFont(isIPad ? 18 : 16),
+    fontWeight: '600',
+    marginBottom: isIPad ? 8 : 4,
+  },
+  contactUsIntro: {
+    fontSize: scaleFont(isIPad ? 16 : 14),
+    marginBottom: isIPad ? 8 : 4,
+  },
+  contactUsDivider: {
+    marginTop: isIPad ? 12 : 8,
+    marginBottom: isIPad ? 4 : 2,
+    paddingVertical: isIPad ? 16 : 12,
+    paddingHorizontal: isIPad ? 20 : 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  contactUsDividerText: {
+    fontSize: scaleFont(isIPad ? 20 : 17),
+    fontWeight: '800',
+  },
+  footerBlock: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: isIPad ? 20 : 16,
+    paddingVertical: isIPad ? 16 : 14,
+    marginTop: isIPad ? 8 : 6,
+  },
+  footerBlockHalf: {
+    flex: 1,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: isIPad ? 14 : 10,
+    marginTop: 0,
+  },
+  footerBlockTitle: {
+    fontSize: scaleFont(isIPad ? 16 : 14),
+    fontWeight: '800',
+    marginBottom: isIPad ? 8 : 6,
+    letterSpacing: 0.2,
+  },
+  footerBlockText: {
+    fontSize: scaleFont(isIPad ? 17 : 15),
+    lineHeight: scaleFont(isIPad ? 26 : 22),
+  },
+  footerLinkText: {
+    fontSize: scaleFont(isIPad ? 17 : 15),
+    lineHeight: scaleFont(isIPad ? 26 : 22),
+    textDecorationLine: 'underline',
+    marginTop: 2,
+  },
+  footerSocialRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  footerSocialBtn: {
+    paddingHorizontal: isIPad ? 18 : 14,
+    paddingVertical: isIPad ? 10 : 8,
+    borderRadius: 999,
+  },
+  footerSocialTxt: {
+    fontWeight: '700',
+    fontSize: scaleFont(isIPad ? 15 : 13),
+    letterSpacing: 0.2,
+  },
+  infoModalTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: scaleFont(isIPad ? 22 : 18),
+    fontWeight: '800',
+    paddingHorizontal: 8,
+  },
+  infoRefreshBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoRefreshTxt: {
+    fontSize: scaleFont(20),
+    fontWeight: '800',
+  },
+  infoOfflineBanner: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  infoOfflineTxt: {
+    fontSize: scaleFont(12),
+    fontWeight: '600',
+  },
+  infoModalBody: {
+    paddingHorizontal: isIPad ? 32 : 16,
+    paddingVertical: isIPad ? 24 : 16,
+    paddingBottom: 48,
+  },
+  infoParagraph: {
+    fontSize: scaleFont(isIPad ? 19 : 16),
+    lineHeight: scaleFont(isIPad ? 30 : 26),
+    marginBottom: isIPad ? 18 : 14,
+  },
+  teamCategoryBlock: {
+    marginBottom: isIPad ? 26 : 20,
+  },
+  teamCategoryHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: isIPad ? 10 : 8,
+    borderRadius: 6,
+    marginBottom: isIPad ? 14 : 10,
+  },
+  teamCategoryHeaderText: {
+    fontSize: scaleFont(isIPad ? 20 : 17),
+    fontWeight: '800',
+  },
+  teamMemberGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: isIPad ? 14 : 10,
+  },
+  teamMemberCard: {
+    width: isIPad ? '23.5%' : '47.5%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 12,
+    alignItems: 'center',
+  },
+  teamMemberPhoto: {
+    width: isIPad ? 110 : 84,
+    height: isIPad ? 110 : 84,
+    borderRadius: isIPad ? 55 : 42,
+    marginBottom: 8,
+  },
+  teamMemberName: {
+    fontSize: scaleFont(isIPad ? 16 : 14),
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  teamMemberRole: {
+    marginTop: 3,
+    fontSize: scaleFont(isIPad ? 13 : 11),
+    textAlign: 'center',
+  },
 });
 
 export default App;

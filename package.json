@@ -1,6 +1,6 @@
 {
   "name": "baahrakhari-mobile",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "postinstall": "patch-package",
@@ -13,7 +13,20 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "verify": "npm run lint && npm run typecheck && npm test",
-    "android:release": "cd android && ./gradlew assembleRelease"
+    "android:release": "cd android && ./gradlew assembleRelease",
+    "android:aab": "cd android && ./gradlew clean bundleRelease",
+    "emulator:android": "scripts/android_emulator.sh boot",
+    "emulator:android:status": "scripts/android_emulator.sh status",
+    "emulator:android:list": "scripts/android_emulator.sh list",
+    "simulator:ios": "scripts/ios_simulator.sh boot",
+    "simulator:ios:status": "scripts/ios_simulator.sh status",
+    "simulator:ios:list": "scripts/ios_simulator.sh list",
+    "metro:start": "scripts/metro.sh start",
+    "metro:status": "scripts/metro.sh status",
+    "metro:stop": "scripts/metro.sh stop",
+    "dev:android": "scripts/dev_android.sh",
+    "dev:ios": "scripts/dev_ios.sh",
+    "dev:mobile": "scripts/dev_mobile.sh"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.2",
