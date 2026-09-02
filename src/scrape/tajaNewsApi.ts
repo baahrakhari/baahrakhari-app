@@ -6,6 +6,7 @@ import {
   TAJA_NEWS_API_URL,
 } from '../config/site';
 import type {Article, ParsedArticle} from '../types/article';
+import {extractArticleVideos} from './articleVideos';
 import {htmlToPlainText} from './baahrakhari';
 
 const UA =
@@ -92,6 +93,7 @@ export function mapTajaApiItem(item: TajaApiItem): Article {
   const id = String(item.id);
   const title = htmlToPlainText(item.title || '').trim() || 'बाह्रखरी';
   const bodyText = htmlToPlainText(item.content || '');
+  const videos = extractArticleVideos(item.content);
   return {
     id,
     url: articleUrl(item),
@@ -102,6 +104,7 @@ export function mapTajaApiItem(item: TajaApiItem): Article {
     publishedAtMs: parsePublishedOnMs(item.published_on),
     imageUrl: imageUrl(item),
     bodyText,
+    videos: videos.length > 0 ? videos : undefined,
     fetchedAt: Date.now(),
   };
 }

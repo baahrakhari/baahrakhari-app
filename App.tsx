@@ -46,6 +46,7 @@ import {
   scaleFont,
 } from './src/theme/device';
 import type {Article, CategoryKey, SavedArticle} from './src/types/article';
+import {ArticleVideoEmbeds} from './src/components/ArticleVideoEmbeds';
 import {DentArticleAction} from './src/components/DentArticleAction';
 import {AppSplash} from './src/components/AppSplash';
 import {formatArticleMetaLine} from './src/format/articleMeta';
@@ -1150,6 +1151,7 @@ function AppBody(): React.JSX.Element {
                             <Text style={[styles.loadingInline, {color: palette.textSecondary}]}>लेख लोड हुँदैछ …</Text>
                           </View>
                         )}
+                        <ArticleVideoEmbeds videos={item.videos} palette={palette} />
                         </PinchZoomArticleBody>
                         </GHScrollView>
                         {isIPad && hasNext ? (
@@ -1351,6 +1353,10 @@ function AppBody(): React.JSX.Element {
                   ]}>
                   {readModalArticle.bodyText}
                 </Text>
+                <ArticleVideoEmbeds
+                  videos={readModalArticle.videos}
+                  palette={palette}
+                />
                 </PinchZoomArticleBody>
               </GHScrollView>
             ) : null}

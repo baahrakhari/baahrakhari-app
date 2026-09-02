@@ -12,6 +12,17 @@ the one-line pointer in the repo-root `context.md`) in the same change.
 - [`DEEP_LINKING.md`](DEEP_LINKING.md) — how `https://baahrakhari.com/detail/{id}`
   links open in-app (Android App Links / iOS Universal Links), plus the
   server-side `.well-known` files the website team must host.
+- [`VIDEO_EMBEDS.md`](VIDEO_EMBEDS.md) — how videos embedded in article
+  bodies are detected and opened in the YouTube app or the default browser
+  (never in-app). Read this before touching `src/scrape/articleVideos.ts`,
+  `src/linking/videoLinks.ts`, or the `<queries>` /
+  `LSApplicationQueriesSchemes` entries the hand-off depends on.
+- [`NOTIFICATIONS.md`](NOTIFICATIONS.md) — how breaking-news alerts work
+  (foreground polling + local notifications, no push server), the
+  permission/AppDelegate wiring they depend on, and what real remote push
+  would require. Read this before touching `src/state/useArticleAlerts.ts`,
+  `ios/Baahrakhari/AppDelegate.swift`, or the notification entries in
+  `AndroidManifest.xml`.
 
 ## Releasing
 

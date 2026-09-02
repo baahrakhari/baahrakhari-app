@@ -17,6 +17,10 @@ Full index: `docs/README.md`. Highlights:
   `docs/play-store/UPLOAD_NEW_RELEASE.md`
 - App Store metadata/review: `docs/app-store/`
 - Deep linking: `docs/DEEP_LINKING.md`
+- Embedded article videos (open in YouTube app / browser, never in-app):
+  `docs/VIDEO_EMBEDS.md`
+- Breaking-news alerts (how they fire, and why they can't reach a closed
+  app): `docs/NOTIFICATIONS.md`
 
 **When a process, script, or documented path changes, update the relevant
 doc above (and this file / `docs/README.md` if the pointer itself moves) in

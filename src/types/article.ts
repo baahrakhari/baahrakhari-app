@@ -1,3 +1,5 @@
+import type {ArticleVideo} from '../scrape/articleVideos';
+
 export type CategorySlug =
   | 'latest-news'
   | 'politics'
@@ -30,6 +32,11 @@ export type Article = ParsedArticle & {
   publishedAtMs?: number;
   imageUrl?: string;
   bodyText: string;
+  /**
+   * Players embedded in the body HTML. The body itself is plain text, so
+   * these are rendered as tappable cards that open outside the app.
+   */
+  videos?: ArticleVideo[];
   fetchedAt: number;
 };
 

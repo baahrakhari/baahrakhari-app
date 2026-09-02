@@ -1,5 +1,6 @@
 import {SITE_ORIGIN} from '../config/site';
 import type {Article, ParsedArticle} from '../types/article';
+import {extractArticleVideos} from './articleVideos';
 
 const UA =
   'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 BaahrakhariMobile/1';
@@ -231,11 +232,7 @@ function parseImage(html: string): string | undefined {
   return undefined;
 }
 
-function parseBodyText(html: string): string {
-  const editor = extractEditorInnerHtml(html);
-  if (!editor) {
-    return '';
-  }
+function parseBodyText(editor: string): string {
   const chunks: string[] = [];
   const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let m: RegExpExecArray | null;
@@ -258,7 +255,8 @@ export function parseDetailArticle(
   const cat = html.match(
     /<span[^>]*class="[^"]*cat-title[^"]*"[^>]*>([\s\S]*?)<\/span>/i,
   );
-  const bodyText = parseBodyText(html);
+  const editor = extractEditorInnerHtml(html) ?? '';
+  const videos = extractArticleVideos(editor);
   return {
     ...base,
     categoryLabel: cat?.[1] ? decodeEntities(stripTags(cat[1])).trim() : undefined,
@@ -266,6 +264,7 @@ export function parseDetailArticle(
     publishedNepali: parsePublishedNepali(html),
     publishedAtMs: parsePublishedAtMs(html),
     imageUrl: parseImage(html),
-    bodyText,
+    bodyText: parseBodyText(editor),
+    videos: videos.length > 0 ? videos : undefined,
   };
 }
