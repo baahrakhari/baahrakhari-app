@@ -36,8 +36,12 @@ export const NEWS_CATEGORIES: Array<{slug: CategoryKey; label: string}> = [
   {slug: 'literature', label: 'साहित्य'},
   {slug: 'editorial', label: 'सम्पादकीय'},
   {slug: 'international', label: 'विदेश'},
-  /** Dedicated Contact Us page (not a scrape feed). */
-  {slug: 'contact-us', label: 'Contact Us'},
+  /**
+   * Dedicated Contact Us page (not a scrape feed). Nepali first, English
+   * kept on the same line so Play News reviewers can still find "Contact us".
+   * Android home-footer copy stays English-only (`Contact Us`).
+   */
+  {slug: 'contact-us', label: 'सम्पर्क गर्नुहोस् / Contact us'},
 ];
 
 /** External pages linked from the site's header/footer. */

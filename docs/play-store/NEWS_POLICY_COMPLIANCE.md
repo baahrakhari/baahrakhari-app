@@ -60,8 +60,13 @@ Must match [https://baahrakhari.com/contact](https://baahrakhari.com/contact) an
 
 ## App changes in 1.2.7 (verify on release build)
 
-- [ ] **Contact Us** entry in the burger/side-drawer menu (clear English label — not “Hamro”); shown on **Android and iOS**
-- [ ] **Home feed footer** — dedicated **Contact Us** section (phone + email preview), shown on the front page on **Android only** (Google Play requirement); not shown on iOS front page — About links separate
+- [ ] **Contact Us** entry in the burger/side-drawer menu (label
+  **सम्पर्क गर्नुहोस् / Contact us** — Nepali first, English kept on the
+  same line so Play reviewers can still find “Contact us”); shown on
+  **Android and iOS**
+- [ ] **Home feed footer** — dedicated **Contact Us** section (phone + email
+  preview, **English-only** copy), shown on the front page on **Android only**
+  (Google Play requirement); not shown on iOS front page — About links separate
 - [ ] **Contact Us page** — publisher name, phone/email at top, website link, full Nepali + English sections
 - [ ] **Article bylines** — author or **Baahrakhari** as publisher fallback
 - [ ] **Live feed** from baahrakhari.com
@@ -76,7 +81,8 @@ Must match [https://baahrakhari.com/contact](https://baahrakhari.com/contact) an
 ### Where reviewers find Contact Us
 
 1. **Android:** Home feed (front page) → scroll to footer → **Contact Us** (shows phone + email), **or**
-2. **Android & iOS:** Tap the burger menu (☰) → **Contact Us** in the category list
+2. **Android & iOS:** Tap the burger menu (☰) → **सम्पर्क गर्नुहोस् / Contact us**
+   in the category list (English “Contact us” is visible on that same line)
 
 iOS intentionally does not show the front-page footer Contact Us section —
 per product decision, iOS keeps Contact Us in the burger menu only. This

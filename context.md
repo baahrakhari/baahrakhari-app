@@ -39,6 +39,7 @@ so keep it short and accurate rather than duplicating doc content here.
 
 1. The editor-in-chief name is "Prateek Pradhan" (fixed in `src/config/site.ts`, `CONTACT_INFO_EN.editor.name`).
 2. Contact Us placement is intentionally platform-specific (Google Play requires it, iOS doesn't need it repeated up front):
-   - **Android:** front-page (home feed) footer Contact Us link + burger-menu entry.
+   - **Android:** front-page (home feed) footer **Contact Us** link (English-only) + burger-menu entry.
    - **iOS:** burger-menu entry only (no front-page footer link).
+   - Drawer label on both platforms: **सम्पर्क गर्नुहोस् / Contact us** (Nepali first, English on the same line).
    - Implemented via `Platform.OS === 'android'` in `App.tsx` (`HomeFeedList`). Details/checklist: `docs/play-store/NEWS_POLICY_COMPLIANCE.md`.

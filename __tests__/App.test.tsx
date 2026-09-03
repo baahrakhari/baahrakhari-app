@@ -65,6 +65,10 @@ jest.mock('../src/state/useArticleAlerts', () => ({
   }),
 }));
 
+jest.mock('../src/state/useSiteHeaderDate', () => ({
+  useSiteHeaderDate: () => 'बिहीबार, भदौ १८, २०८३',
+}));
+
 test('renders correctly', async () => {
   await ReactTestRenderer.act(() => {
     ReactTestRenderer.create(<App />);

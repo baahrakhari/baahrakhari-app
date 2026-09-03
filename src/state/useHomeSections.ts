@@ -9,9 +9,10 @@ export type HomeCategorySection = {
 };
 
 /**
- * Mirrors the handful of magazine-style sections baahrakhari.com stacks
- * below its own "ताजा समाचार" list (राजनीति, अर्थ व्यवसाय, खेल, विचार …).
- * Kept to a small curated set so the home screen stays light on data.
+ * Homepage extras: banner “शीर्ष समाचार” (`getBannerDatas`) plus the handful
+ * of magazine-style sections baahrakhari.com stacks below ताजा समाचार
+ * (राजनीति, अर्थ व्यवसाय, खेल, विचार …). Kept to a small curated set so
+ * the home screen stays light on data.
  */
 const PREVIEW_CATEGORIES: Array<{slug: CategorySlug; label: string}> = [
   {slug: 'politics', label: 'राजनीति'},
@@ -20,7 +21,8 @@ const PREVIEW_CATEGORIES: Array<{slug: CategorySlug; label: string}> = [
   {slug: 'opinion', label: 'विचार'},
 ];
 const PREVIEW_ITEMS_PER_CATEGORY = 4;
-const BREAKING_HEADLINE_LIMIT = 8;
+/** Fetch enough banner items for the full in-app headlines page. */
+const HEADLINES_FETCH_LIMIT = 40;
 
 /** Homepage-only sections built from `getBannerDatas` + `getCategoryList`. */
 export function useHomeSections() {
@@ -37,7 +39,7 @@ export function useHomeSections() {
     (async () => {
       try {
         const [headlines, ...categoryResults] = await Promise.all([
-          fetchBreakingHeadlines(BREAKING_HEADLINE_LIMIT).catch(() => []),
+          fetchBreakingHeadlines(HEADLINES_FETCH_LIMIT).catch(() => []),
           ...PREVIEW_CATEGORIES.map(cat =>
             fetchCategoryList(cat.slug).catch(() => ({
               listing: [],

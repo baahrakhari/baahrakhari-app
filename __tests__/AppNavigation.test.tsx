@@ -66,6 +66,9 @@ jest.mock('../src/state/useArticleAlerts', () => ({
 jest.mock('../src/scrape/tajaNewsApi', () => ({
   fetchNewsDetail: jest.fn(async () => null),
 }));
+jest.mock('../src/state/useSiteHeaderDate', () => ({
+  useSiteHeaderDate: () => 'बिहीबार, भदौ १८, २०८३',
+}));
 
 const useArticleFeedMock = jest.requireMock('../src/state/useArticleFeed')
   .useArticleFeed as jest.Mock;
@@ -117,7 +120,14 @@ describe('home feed', () => {
     expect(screen.getByLabelText('समाचार 103')).toBeTruthy();
   });
 
-  it('opens the swipe reader when a headline is tapped, and the home icon returns', async () => {
+  it('shows the Nepali header date under the tappable logo', async () => {
+    await renderApp();
+
+    expect(screen.getByText('बिहीबार, भदौ १८, २०८३')).toBeTruthy();
+    expect(screen.getByLabelText('गृहपृष्ठ')).toBeTruthy();
+  });
+
+  it('opens the swipe reader when a ताजा card is tapped, and the logo returns home', async () => {
     await renderApp();
     expect(screen.queryByLabelText('Share article')).toBeNull();
 
@@ -127,13 +137,13 @@ describe('home feed', () => {
       expect(screen.getAllByLabelText('Share article').length).toBeGreaterThan(0),
     );
 
-    fireEvent.press(screen.getByText('⌂'));
+    fireEvent.press(screen.getByLabelText('गृहपृष्ठ'));
 
     await waitFor(() => expect(screen.queryByLabelText('Share article')).toBeNull());
     expect(screen.getByLabelText('समाचार 101')).toBeTruthy();
   });
 
-  it('shows the breaking strip and opens a breaking story in the reader overlay', async () => {
+  it('shows compact शीर्ष समाचार rows and opens a story in the reader overlay', async () => {
     mockSections = {
       breaking: [article('900', {title: 'ब्रेकिंग शीर्षक', bodyText: 'ब्रेकिंग पूरा पाठ'})],
       sections: [],
@@ -142,16 +152,65 @@ describe('home feed', () => {
 
     await renderApp();
 
-    expect(screen.getByText('ब्रेकिंग')).toBeTruthy();
+    expect(screen.getByText('शीर्ष समाचार')).toBeTruthy();
+    expect(screen.queryByText('ब्रेकिंग')).toBeNull();
     fireEvent.press(screen.getByLabelText('ब्रेकिंग शीर्षक'));
 
     await waitFor(() => expect(screen.getByText('ब्रेकिंग पूरा पाठ')).toBeTruthy());
+    expect(screen.getByLabelText('Share article')).toBeTruthy();
   });
 
-  it('hides the breaking strip when the banner feed is empty', async () => {
+  it('hides the headlines block when the banner feed is empty', async () => {
     await renderApp();
 
-    expect(screen.queryByText('ब्रेकिंग')).toBeNull();
+    expect(screen.queryByText('शीर्ष समाचार')).toBeNull();
+    expect(screen.queryByLabelText('थप शीर्ष समाचार...')).toBeNull();
+  });
+
+  it('caps home headlines at 6 and opens the full list from थप शीर्ष समाचार...', async () => {
+    mockSections = {
+      breaking: Array.from({length: 8}, (_, i) =>
+        article(`9${i}`, {title: `शीर्षक ${i + 1}`}),
+      ),
+      sections: [],
+      loading: false,
+    };
+
+    await renderApp();
+
+    expect(screen.getByLabelText('शीर्षक 1')).toBeTruthy();
+    expect(screen.getByLabelText('शीर्षक 6')).toBeTruthy();
+    expect(screen.queryByLabelText('शीर्षक 7')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('थप शीर्ष समाचार...'));
+
+    await waitFor(() => expect(screen.getByLabelText('शीर्षक 7')).toBeTruthy());
+    expect(screen.getByLabelText('शीर्षक 8')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('गृहपृष्ठ'));
+    await waitFor(() => expect(screen.queryByLabelText('शीर्षक 7')).toBeNull());
+  });
+
+  it('shares a home headline from its row icon', async () => {
+    const share = jest
+      .spyOn(require('react-native').Share, 'share')
+      .mockResolvedValue({action: 'sharedAction'});
+    mockSections = {
+      breaking: [article('900', {title: 'ब्रेकिंग शीर्षक'})],
+      sections: [],
+      loading: false,
+    };
+
+    await renderApp();
+    fireEvent.press(screen.getByLabelText('Share ब्रेकिंग शीर्षक'));
+
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    expect(share.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('https://baahrakhari.com/detail/900'),
+      }),
+    );
+    share.mockRestore();
   });
 
   it('switches category from a home section "सबै हेर्नुहोस्" link', async () => {
@@ -182,6 +241,29 @@ describe('burger menu', () => {
 
     await waitFor(() => expect(useArticleFeedMock).toHaveBeenLastCalledWith('sport'));
     await settleAnimations();
+  });
+
+  it('uses the drawer logo as Home and has no extra ताजा समाचार row', async () => {
+    mockSections = {
+      breaking: [article('900', {title: 'ब्रेकिंग शीर्षक'})],
+      sections: [],
+      loading: false,
+    };
+    await renderApp();
+    fireEvent.press(screen.getByLabelText('थप शीर्ष समाचार...'));
+    await waitFor(() =>
+      expect(screen.getAllByText('शीर्ष समाचार').length).toBeGreaterThan(0),
+    );
+
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('बन्द गर्नुहोस्')).toBeTruthy());
+    expect(screen.queryByLabelText('ताजा समाचार')).toBeNull();
+
+    const homeMarks = screen.getAllByLabelText('गृहपृष्ठ');
+    fireEvent.press(homeMarks[homeMarks.length - 1]);
+    await settleAnimations();
+
+    await waitFor(() => expect(screen.getByLabelText('समाचार 101')).toBeTruthy());
   });
 
   it('opens the About overlay', async () => {
@@ -219,7 +301,11 @@ describe('saved articles', () => {
   it('shows the empty state, then the saved list', async () => {
     await renderApp();
 
-    fireEvent.press(screen.getByLabelText('Read later list'));
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('सुरक्षित लेखहरू')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('सुरक्षित लेखहरू'));
+    await settleAnimations();
+
     await waitFor(() =>
       expect(screen.getByText('अहिलेसम्म कुनै लेख सुरक्षित गरिएको छैन ।')).toBeTruthy(),
     );
@@ -230,7 +316,10 @@ describe('saved articles', () => {
       isSaved: () => true,
     };
     screen.rerender(<App />);
-    fireEvent.press(screen.getByLabelText('Read later list'));
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('सुरक्षित लेखहरू')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('सुरक्षित लेखहरू'));
+    await settleAnimations();
 
     await waitFor(() => expect(screen.getByText('सुरक्षित लेख')).toBeTruthy());
     expect(screen.getByText('सुरक्षित लेख: 1/20')).toBeTruthy();
@@ -255,11 +344,14 @@ describe('Contact Us placement', () => {
     await renderApp();
 
     expect(screen.queryByLabelText('Contact Us')).toBeNull();
+    expect(screen.queryByLabelText('सम्पर्क गर्नुहोस् / Contact us')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
-    await waitFor(() => expect(screen.getByLabelText('Contact Us')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('सम्पर्क गर्नुहोस् / Contact us')).toBeTruthy(),
+    );
 
-    fireEvent.press(screen.getByLabelText('Contact Us'));
+    fireEvent.press(screen.getByLabelText('सम्पर्क गर्नुहोस् / Contact us'));
 
     await waitFor(() =>
       expect(screen.getByText(APP_PUBLISHER.legalName)).toBeTruthy(),
@@ -269,11 +361,14 @@ describe('Contact Us placement', () => {
 });
 
 describe('theme toggle', () => {
-  it('flips between light and dark', async () => {
+  it('flips between light and dark from the drawer', async () => {
     await renderApp();
 
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('Dark theme')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Dark theme'));
 
     await waitFor(() => expect(screen.getByLabelText('Light theme')).toBeTruthy());
+    await settleAnimations();
   });
 });

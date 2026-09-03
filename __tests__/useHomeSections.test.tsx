@@ -1,5 +1,5 @@
 /**
- * Home screen data assembly: the ब्रेकिंग strip (`getBannerDatas`) plus the
+ * Home screen data assembly: the शीर्ष समाचार list (`getBannerDatas`) plus the
  * curated category previews (`getCategoryList`).
  */
 
@@ -36,6 +36,7 @@ it('exposes breaking headlines and the four preview categories', async () => {
   const {result} = renderHook(() => useHomeSections());
 
   await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(breaking).toHaveBeenCalledWith(40);
   expect(result.current.breaking.map(item => item.id)).toEqual(['900', '901']);
   expect(result.current.sections.map(section => section.slug)).toEqual([
     'politics',
