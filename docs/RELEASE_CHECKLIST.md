@@ -1,19 +1,20 @@
-# Release checklist — Prateek feedback (next cut)
+# Release checklist — Prateek feedback (1.4.0)
 
-Living task list for the next iOS + Android release, sourced from
+Living task list for the iOS + Android **1.4.0** cut, sourced from
 `requirements_prateek.txt`. Update checkboxes and notes as work lands.
 
 | | |
 |---|---|
 | **Source** | `requirements_prateek.txt` |
 | **Platforms** | iOS and Android (shared `App.tsx` unless noted) |
-| **Status** | Implemented in JS (Jest); device smoke still pending |
-| **Last updated** | 2026-09-02 |
+| **Version** | `1.4.0` (iOS build 4; Android `versionCode` 131, local `gradle.properties` only) |
+| **Status** | Shipped in JS; Jest + `tsc` verified 2026-09-03; iOS sim 2026-09-02; Android Pixel_10_API_36 smoke 2026-09-03 |
+| **Last updated** | 2026-09-03 |
 | **Skipped this release** | Item 9 (ads — marked low priority in the source) |
 
 Progress: 10 / 10 in-scope items implemented in shared JS (item 9 skipped;
-item 4 is a consequence of 1–3). Device/simulator checkboxes in
-**Verification** remain open.
+item 4 is a consequence of 1–3). Verification below: iOS simulator, Android
+Pixel_10 smoke, and Jest.
 
 ---
 
@@ -76,7 +77,8 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 - [x] Saved-articles entry remains in the burger menu (`सुरक्षित लेखहरू`)
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
-- [x] Bookmark asset next to that drawer row
+- [x] Bookmark asset on the right of that drawer row (same save icon as
+  article cards); saved sits directly under the theme toggle
 
 | | |
 |---|---|
@@ -103,27 +105,33 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 - [x] Label **शीर्ष समाचार** instead of **ब्रेकिंग**
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
+  - [x] Home shows a slim **शीर्ष समाचार** ribbon under logo + date (same
+    style as ताजा); the full headlines page uses that title too
 
 | | |
 |---|---|
 | **Priority** | High |
 | **Status** | Done |
-| **Notes** | Red category bar (`ताजा समाचार ▾`) left as-is. Below-the-fold
-  section headers (राजनीति / … / footers) keep original padding.
-  Notification title `ब्रेकिंग समाचार` in `useArticleAlerts` is **out of
-  scope** this cut — left unchanged. |
+| **Notes** | Red category bar (`ताजा समाचार ▾`) stays off home. The slim
+  **शीर्ष समाचार** ribbon is the section header under logo + date.
+  Category switching stays in the burger and below-the-fold section
+  links. Below-the-fold section headers (राजनीति / … / footers) keep
+  original padding. Notification title `ब्रेकिंग समाचार` in
+  `useArticleAlerts` is **out of scope** this cut — left unchanged. |
 
-### 6. Top ~1/3: 3–6 headlines, vertical scroll, “थप शीर्ष समाचार…”
+### 6. Top ~1/3: headlines as the title pane, vertical scroll, “थप शीर्ष समाचार…”
 
 - [x] Headlines occupy roughly the top third of the home screen (compact rows)
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
-- [x] 3–6 items, **vertical** (no horizontal strip)
+- [x] Up to **12** items, **vertical**, internally scrollable (no horizontal strip)
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
-- [x] Cap at **6** articles on home
+- [x] Cap at **12** articles on home
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
+- [x] Home **शीर्ष समाचार** ribbon under logo + date; no category bar
+  (`ताजा समाचार ▾`). The ribbon labels the scrollable headlines pane
 - [x] Trailing **थप शीर्ष समाचार...** in small type, 50% gray
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
@@ -135,9 +143,10 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 |---|---|
 | **Priority** | High |
 | **Status** | Done |
-| **Notes** | New in-app `HeadlinesList` (full `getBannerDatas` list, share
-  on rows, tap → existing read modal). Approximate 1/3 — not a locked
-  viewport split. |
+| **Notes** | Slim ribbon, then compact pane (~28% window height) that
+  scrolls internally through up to 12 rows so ताजा keeps ~2/3.
+  `HeadlinesList` uses the same **शीर्ष समाचार** ribbon. Approximate
+  1/3 — not a locked viewport split. |
 
 ### 7. Bottom ~2/3: ताजा समाचार ribbon + horizontal article scroll
 
@@ -156,15 +165,16 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 
 ### 8. Rest of the home page stays as-is
 
-- [x] Politics / economy / sport / opinion previews + footer unchanged
-  aside from work in other items
+- [x] Politics / economy / sport / opinion previews keep the same
+  layout; section ribbons now match slim `शीर्ष` / `ताजा` (`homeRibbon`),
+  with `सबै हेर्नुहोस्` on the same row
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
 
 | | |
 |---|---|
 | **Priority** | Constraint |
-| **Status** | Guardrail held — those sections still use `homeSectionHeader` |
+| **Status** | Slim ribbons applied — below-the-fold headers reuse `homeRibbon` |
 
 ### 9. Road Block and Content Block ads
 
@@ -196,12 +206,13 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 
 ### 11. Burger Contact Us: Nepali first, then English (Play-readable)
 
-- [x] Drawer label is Nepali then English (`सम्पर्क गर्नुहोस् / Contact us`)
+- [x] Drawer label is Nepali then English on **two lines**
+      (`सम्पर्क गर्नुहोस्` / `Contact us`)
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
 - [x] English **Contact us** remains readable for Google Play News policy
   - [x] Android (required)
-  - [x] iOS (same string for consistency)
+  - [x] iOS (same two-line row for consistency)
 - [x] Update `docs/play-store/NEWS_POLICY_COMPLIANCE.md` if copy/placement
   changes
 
@@ -233,26 +244,41 @@ item 4 is a consequence of 1–3). Device/simulator checkboxes in
 3. **Theme in drawer** — A. Under the drawer logo.
 4. **Per-article save** — A. Keep on the ताजा swipe reader; only the
    header Saved-list button was removed.
-5. **Drawer save icon** — A. Existing bookmark asset next to
-   `सुरक्षित लेखहरू`.
+5. **Drawer save icon** — A. Same article-card bookmark asset, **right**
+   of `सुरक्षित लेखहरू` (label left). Saved sits directly under the
+   theme row.
 6. **Ribbon thickness** — A. ~half vertical padding, slightly smaller type.
-   Red category indicator bar **out of scope / left as-is**.
-7. **Headlines count** — **6** before “थप…”.
+   Home header category bar (`ताजा समाचार ▾`) **removed**. Slim
+   **शीर्ष समाचार** ribbon sits under logo + date as the headlines
+   section header. Below-the-fold section headers reuse the same slim
+   `homeRibbon` (see-all on the same row). Category switching remains in
+   the burger and below-the-fold section links.
+7. **Headlines count** — **12** before “थप…”. Home **शीर्ष समाचार**
+   ribbon is the section header for that scrollable pane; the full
+   headlines page uses the same title.
 8. **Main headlines page** — A. New in-app full list of banner headlines.
 9. **1/3 + 2/3** — A. Approximate (compact headlines, larger ताजा strip).
 10. **ताजा cards** — A. Reuse former breaking-card style, ~8–12 items;
     tap still opens the swipe reader.
 11. **Share** — Headline reader **and** share icon on each home headline
     row (also on the full headlines page).
-12. **Contact** — `सम्पर्क गर्नुहोस् / Contact us` (one line). Android
-    home footer stays English-only.
+12. **Contact** — Drawer: two lines, Nepali then English (`सम्पर्क गर्नुहोस्`
+    / `Contact us`). Android home footer stays English-only. Burger rows
+    use a hairline separator; drawer is slightly narrower / slimmer.
 
 ---
 
 ## Verification (after implementation)
 
-- [ ] iPhone simulator: header, home 1/3+2/3, drawer, share on headlines, Contact label
-- [ ] Android emulator: same + Play-visible “Contact us”
+- [x] iPhone simulator: header, home 1/3+2/3, share icons on headlines (2026-09-02)
+  - **Pass** — iPhone 17 Pro, iOS 26.5, UDID `5C53665C-12A1-45AF-BEBB-9A0F39C3F78F`, scheme `Baahrakhari`
+  - Launch: no crash. Home shows burger + logo (`१२ खरी DIGITAL NEWS`) + Nepali date (`बिहीबार, भदौ १८, २०८३`), slim `शीर्ष समाचार` ribbon (no `ताजा समाचार ▾` category bar under the header), then up to 12 internally scrolling headline rows with share icons + `थप शीर्ष समाचार...`, then `ताजा समाचार` horizontal cards
+  - Screenshot: `/tmp/baahrakhari-ios-home.png` (notification permission alert overlays center; UI visible behind it)
+  - Drawer / Contact label / theme row: **not tapped** (no simctl accessibility driver). Share sheet not opened.
+- [x] Android emulator: Pixel_10_API_36 smoke (2026-09-03) + Play-visible “Contact us”
+  - **Pass** — AVD `Pixel_10_API_36` (device `pixel_10`; no Pixel 10 Pro image installed)
+  - Home + drawer match the iOS layout; theme sun/moon control on the right; drawer Contact is two lines (`सम्पर्क गर्नुहोस्` / `Contact us`)
+  - Screenshots: `/tmp/baahrakhari-android-home.png`, `/tmp/baahrakhari-android-drawer.png`
 - [ ] iPad / large Android (if used): split still readable
-- [x] Tests: `AppNavigation` home/headlines/theme/contact cases updated; `nepaliDate` + `siteHeaderDate` unit tests
+- [x] Tests: Jest 10 suites / 93 tests passed 2026-09-03; `tsc --noEmit` clean. `AppNavigation` home/headlines/theme/contact/drawer-order cases; `nepaliDate` + `siteHeaderDate` unit tests
 - [x] `docs/play-store/NEWS_POLICY_COMPLIANCE.md` drawer Contact copy updated

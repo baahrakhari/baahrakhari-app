@@ -6,13 +6,55 @@ Copy-paste source for Android release notes in Play Console.
 |---|---|
 | Package | `com.baahrakhari.media` |
 | Contact URL (News declaration) | `https://baahrakhari.com/contact` |
-| **Current release** | `1.3.0` (`versionCode 130`) — AAB built (production) |
+| **Current release** | `1.4.0` (`versionCode 131`) — Prateek home/drawer cut |
 
 Full upload checklist: `docs/play-store/NEWS_POLICY_COMPLIANCE.md`
 
 ---
 
-## 1.3.0 — current release (upload this)
+## 1.4.0 — current release (upload this)
+
+Home-feed redesign from Prateek’s feedback: website-style headlines pane,
+slim ribbons, drawer Home/theme/save, and Play-visible Contact us. Dual
+iOS + Android cut.
+
+### What's new (en-US)
+
+```text
+Home screen now matches baahrakhari.com more closely.
+
+• Headlines occupy the top of Home (up to 12 rows) with a slim शीर्ष समाचार ribbon
+• ताजा समाचार stays as a larger horizontal strip underneath
+• Header is logo + Nepali date; theme and Saved live in the burger menu
+• Contact us stays in the drawer (Nepali then English) for Play News policy
+```
+
+### What's new (ne-NP)
+
+```text
+गृहपृष्ठ अब baahrakhari.com सँग अझ मिल्दोजुल्दो छ।
+
+• शीर्ष समाचार गृहपृष्ठको माथिल्लो भागमा (१२ सम्म) पातलो रिबनसहित
+• ताजा समाचार त्यस मुनि ठूलो तेर्सो स्ट्रिप
+• हेडरमा लोगो र नेपाली मिति; थिम र सुरक्षित लेखहरू बर्गर मेनुमा
+• Contact us ड्रअरमा (नेपाली, त्यसपछि अंग्रेजी) Play News नीतिअनुसार
+```
+
+### Short (en-US)
+
+```text
+Home redesigned to match the website headlines layout; Contact us still in the menu.
+```
+
+### Short (ne-NP)
+
+```text
+गृहपृष्ठ वेबसाइटको शीर्ष समाचार लेआउटअनुसार; Contact us मेनुमै रहन्छ।
+```
+
+---
+
+## 1.3.0 — superseded (do not upload)
 
 Production version bump for Google Play (versionCode 130). Same feature set
 as 1.2.9 (editor attribution fix, Contact Us / News policy compliance) —

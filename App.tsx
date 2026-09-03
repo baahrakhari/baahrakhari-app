@@ -24,7 +24,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import {CONTACT_INFO_EN, FOOTER_INFO, INFO_LINKS, NEWS_CATEGORIES, SITE_CONTACT_URL, APP_PUBLISHER, nepaliDigitsToAscii, type ContactBlocksContent} from './src/config/site';
+import {CONTACT_INFO_EN, DRAWER_FEED_CATEGORIES, FOOTER_INFO, INFO_LINKS, NEWS_CATEGORIES, SITE_CONTACT_URL, APP_PUBLISHER, nepaliDigitsToAscii, type ContactBlocksContent} from './src/config/site';
 import {parseBaahrakhariArticleUrl} from './src/linking/baahrakhariUrls';
 import {fetchNewsDetail} from './src/scrape/tajaNewsApi';
 import {useArticleAlerts} from './src/state/useArticleAlerts';
@@ -54,13 +54,16 @@ import {formatArticleMetaLine} from './src/format/articleMeta';
 
 const BURGER_ICON = '☰';
 const MORE_HEADLINES_LABEL = 'थप शीर्ष समाचार...';
-/** Home vertical headlines before “थप शीर्ष समाचार...”. */
-const HOME_HEADLINE_PREVIEW = 6;
+/** Home title-pane headlines before “थप शीर्ष समाचार...”. */
+const HOME_HEADLINE_PREVIEW = 12;
+/** Compact internally scrolling title pane (~top third of the window). */
+const HOME_HEADLINES_PANE_RATIO = 0.28;
 /** Horizontal ताजा strip on home (~8–12). */
 const TAJA_HORIZONTAL_LIMIT = 12;
+/** Outer home list is header+footer only; headlines scroll in their own pane. */
+const HOME_FEED_LIST_DATA: Array<{id: string}> = [];
 const ICON_SAVE_ARTICLE = require('./assets/icons/save_article.png');
 const ICON_SAVE_ARTICLE_DARK = require('./assets/icons/save_article_dark.png');
-const ICON_READ_LATER = require('./assets/icons/read_later_icon.png');
 const ICON_SHARE = require('./assets/icons/share_icon.png');
 const ICON_SHARE_DARK = require('./assets/icons/share_icon_dark.png');
 /** Wide mark for iPad header (next to home); source 201×88 px */
@@ -115,7 +118,7 @@ function AppBody(): React.JSX.Element {
   /** In-app full list of शीर्ष समाचार (opened from “थप शीर्ष समाचार...”). */
   const [headlinesListOpen, setHeadlinesListOpen] = useState(false);
   /**
-   * Home opens as a website-style title list ("शीर्ष समाचार" + ताजा strip +
+   * Home opens as a website-style title list (headline rows + ताजा strip +
    * हाम्रो footer). Tapping a ताजा card drills into the existing swipe reader
    * at that index; the header logo resets us back to the list.
    */
@@ -679,11 +682,7 @@ function AppBody(): React.JSX.Element {
     : '';
 
   const currentCategoryLabel =
-    category === 'home'
-      ? headlinesListOpen
-        ? 'शीर्ष समाचार'
-        : 'ताजा समाचार'
-      : NEWS_CATEGORIES.find(cat => cat.slug === category)?.label ?? '';
+    NEWS_CATEGORIES.find(cat => cat.slug === category)?.label ?? '';
 
   /**
    * First-launch takeover only. Category switches clear `data` while loading,
@@ -780,25 +779,28 @@ function AppBody(): React.JSX.Element {
         {mode === 'feed' ? (
           <>
             {/**
-             * Replaces the old animated collapsing category bar (which users
-             * reported as glitchy) with a slim, always-stable indicator that
-             * simply reopens the burger menu — all category switching now
-             * lives in the side drawer.
+             * Home has no category picker under the logo + date — the
+             * शीर्ष समाचार ribbon is the section header for headlines.
+             * Off-home feeds keep a slim label that reopens the burger;
+             * Politics / Economy / etc. still switch from the drawer
+             * and the below-the-fold section links.
              */}
-            <Pressable
-              onPress={openDrawer}
-              accessibilityRole="button"
-              accessibilityLabel="श्रेणी परिवर्तन गर्नुहोस्"
-              style={[styles.categoryIndicatorBar, {backgroundColor: palette.accent}]}>
-              <Text
-                numberOfLines={1}
-                style={[styles.categoryIndicatorText, {color: palette.onAccent}]}>
-                {currentCategoryLabel}
-              </Text>
-              <Text style={[styles.categoryIndicatorChevron, {color: palette.onAccent}]}>
-                ▾
-              </Text>
-            </Pressable>
+            {category !== 'home' ? (
+              <Pressable
+                onPress={openDrawer}
+                accessibilityRole="button"
+                accessibilityLabel="श्रेणी परिवर्तन गर्नुहोस्"
+                style={[styles.categoryIndicatorBar, {backgroundColor: palette.accent}]}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.categoryIndicatorText, {color: palette.onAccent}]}>
+                  {currentCategoryLabel}
+                </Text>
+                <Text style={[styles.categoryIndicatorChevron, {color: palette.onAccent}]}>
+                  ▾
+                </Text>
+              </Pressable>
+            ) : null}
 
             {category === 'contact-us' ? (
               <ContactUsView palette={palette} />
@@ -1377,7 +1379,7 @@ function AppBody(): React.JSX.Element {
         <SideDrawer
           visible={drawerVisible}
           anim={drawerAnim}
-          width={Math.min(320, Math.round(width * 0.82))}
+          width={Math.min(288, Math.round(width * 0.74))}
           palette={palette}
           category={category}
           isDark={isDark}
@@ -1406,25 +1408,46 @@ type HomePalette = {
   mutedBtn: string;
 };
 
+/** Hairline between burger-menu rows — theme-aware muted gray. */
+function DrawerHairline({color}: {color: string}): React.JSX.Element {
+  return <View style={[styles.drawerHairline, {backgroundColor: color}]} />;
+}
+
 /** Single tappable row inside {@link SideDrawer}. */
 function DrawerItem({
   label,
+  sublabel,
   active,
   palette,
   onPress,
   icon,
+  iconEnd,
+  tintIcon = true,
 }: {
   label: string;
+  sublabel?: string;
   active: boolean;
   palette: HomePalette;
   onPress: () => void;
   icon?: number;
+  /** Bookmark on the right (saved-articles row). */
+  iconEnd?: boolean;
+  tintIcon?: boolean;
 }): React.JSX.Element {
+  const accessibilityLabel = sublabel ? `${label} / ${sublabel}` : label;
+  const iconEl = icon ? (
+    <Image
+      source={icon}
+      style={styles.drawerItemIcon}
+      resizeMode="contain"
+      tintColor={tintIcon ? (active ? palette.accent : palette.text) : undefined}
+    />
+  ) : null;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
       style={({pressed}) => [
         styles.drawerItem,
         {
@@ -1438,22 +1461,25 @@ function DrawerItem({
           {backgroundColor: active ? palette.accent : 'transparent'},
         ]}
       />
-      {icon ? (
-        <Image
-          source={icon}
-          style={styles.drawerItemIcon}
-          resizeMode="contain"
-          tintColor={active ? palette.accent : palette.text}
-        />
-      ) : null}
-      <Text
-        numberOfLines={1}
-        style={[
-          styles.drawerItemText,
-          {color: active ? palette.accent : palette.text, fontWeight: active ? '800' : '600'},
-        ]}>
-        {label}
-      </Text>
+      {!iconEnd ? iconEl : null}
+      <View style={styles.drawerItemTextWrap}>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.drawerItemText,
+            {color: active ? palette.accent : palette.text, fontWeight: active ? '800' : '600'},
+          ]}>
+          {label}
+        </Text>
+        {sublabel ? (
+          <Text
+            numberOfLines={1}
+            style={[styles.drawerItemSublabel, {color: palette.textSecondary}]}>
+            {sublabel}
+          </Text>
+        ) : null}
+      </View>
+      {iconEnd ? iconEl : null}
     </Pressable>
   );
 }
@@ -1462,7 +1488,8 @@ function DrawerItem({
  * Simple side burger menu — replaces the old collapsing category chip bar.
  * All primary navigation (categories, saved articles, About/Team) lives
  * here so the header itself never has to expand/collapse. The brand mark
- * is the Home control; theme toggle sits directly under it.
+ * is the Home control; theme toggle sits directly under it, then saved
+ * articles, then categories, then Contact (two lines).
  */
 function SideDrawer({
   visible,
@@ -1493,6 +1520,8 @@ function SideDrawer({
   onSelectSaved: () => void;
   onSelectInfo: (key: InfoPageKey) => void;
 }): React.JSX.Element {
+  const hairlineColor = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(128,128,128,0.85)';
+  const contactCategory = NEWS_CATEGORIES.find(cat => cat.slug === 'contact-us');
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {/** Modal is a separate native window — nest a provider so top inset is real. */}
@@ -1523,7 +1552,7 @@ function SideDrawer({
               },
             ]}>
             <SafeAreaView edges={['top', 'bottom', 'left']} style={styles.drawerSafeArea}>
-              <View style={[styles.drawerHeader, {borderBottomColor: palette.border}]}>
+              <View style={styles.drawerHeader}>
                 <Pressable
                   onPress={() => {
                     onSelectHome();
@@ -1544,21 +1573,19 @@ function SideDrawer({
                   hitSlop={12}
                   accessibilityRole="button"
                   accessibilityLabel="बन्द गर्नुहोस्"
-                  style={[styles.closeBtn, {borderColor: palette.border}]}>
+                  style={[styles.drawerCloseAbs, styles.closeBtn, {borderColor: palette.border}]}>
                   <Text style={[styles.closeText, {color: palette.text}]}>✕</Text>
                 </Pressable>
               </View>
               <Pressable
+                testID="drawer-theme-toggle"
                 onPress={onToggleTheme}
                 accessibilityRole="button"
                 accessibilityLabel={isDark ? 'Light theme' : 'Dark theme'}
                 hitSlop={8}
                 style={({pressed}) => [
                   styles.drawerThemeRow,
-                  {
-                    borderBottomColor: palette.border,
-                    opacity: pressed ? 0.7 : 1,
-                  },
+                  {opacity: pressed ? 0.7 : 1},
                 ]}>
                 <Image
                   source={isDark ? ICON_THEME_SUN : ICON_THEME_MOON}
@@ -1567,30 +1594,51 @@ function SideDrawer({
                   tintColor={palette.text}
                 />
               </Pressable>
+              <DrawerHairline color={hairlineColor} />
+              <DrawerItem
+                label="सुरक्षित लेखहरू"
+                active={isSaved}
+                palette={palette}
+                icon={isDark ? ICON_SAVE_ARTICLE_DARK : ICON_SAVE_ARTICLE}
+                iconEnd
+                tintIcon={false}
+                onPress={() => {
+                  onSelectSaved();
+                  onClose();
+                }}
+              />
+              <DrawerHairline color={hairlineColor} />
               <ScrollView contentContainerStyle={styles.drawerBody}>
-                {NEWS_CATEGORIES.map(cat => (
-                  <DrawerItem
-                    key={cat.slug}
-                    label={cat.label}
-                    active={category === cat.slug}
-                    palette={palette}
-                    onPress={() => {
-                      onSelectCategory(cat.slug);
-                      onClose();
-                    }}
-                  />
+                {DRAWER_FEED_CATEGORIES.map((cat, index) => (
+                  <React.Fragment key={cat.slug}>
+                    {index > 0 ? <DrawerHairline color={hairlineColor} /> : null}
+                    <DrawerItem
+                      label={cat.label}
+                      active={category === cat.slug}
+                      palette={palette}
+                      onPress={() => {
+                        onSelectCategory(cat.slug);
+                        onClose();
+                      }}
+                    />
+                  </React.Fragment>
                 ))}
-                <View style={[styles.drawerDivider, {backgroundColor: palette.border}]} />
-                <DrawerItem
-                  label="सुरक्षित लेखहरू"
-                  active={isSaved}
-                  palette={palette}
-                  icon={ICON_READ_LATER}
-                  onPress={() => {
-                    onSelectSaved();
-                    onClose();
-                  }}
-                />
+                {contactCategory ? (
+                  <>
+                    <DrawerHairline color={hairlineColor} />
+                    <DrawerItem
+                      label={contactCategory.label}
+                      sublabel={contactCategory.labelEn}
+                      active={category === contactCategory.slug}
+                      palette={palette}
+                      onPress={() => {
+                        onSelectCategory(contactCategory.slug);
+                        onClose();
+                      }}
+                    />
+                  </>
+                ) : null}
+                <DrawerHairline color={hairlineColor} />
                 <DrawerItem
                   label="हाम्रो बारेमा"
                   active={false}
@@ -1600,6 +1648,7 @@ function SideDrawer({
                     onClose();
                   }}
                 />
+                <DrawerHairline color={hairlineColor} />
                 <DrawerItem
                   label="हाम्रो टिम"
                   active={false}
@@ -1798,8 +1847,9 @@ function InfoOverlayModal({
 }
 
 /**
- * Website-style home view: compact vertical शीर्ष समाचार, then a larger
- * horizontal ताजा समाचार strip, then the existing category previews + footer.
+ * Website-style home view: slim “शीर्ष समाचार” ribbon, then a compact
+ * internally scrolling headline pane, then a larger horizontal ताजा
+ * समाचार strip, then the existing category previews + footer.
  */
 function HomeFeedList({
   items,
@@ -1834,6 +1884,9 @@ function HomeFeedList({
 }): React.JSX.Element {
   const homeHeadlines = breaking.slice(0, HOME_HEADLINE_PREVIEW);
   const tajaCards = items.slice(0, TAJA_HORIZONTAL_LIMIT);
+  const headlinesPaneMaxHeight = Math.round(
+    Dimensions.get('window').height * HOME_HEADLINES_PANE_RATIO,
+  );
 
   const renderTajaCard = useCallback(
     ({item, index}: {item: Article; index: number}) => (
@@ -1868,8 +1921,9 @@ function HomeFeedList({
 
   return (
     <FlatList
-      data={homeHeadlines}
+      data={HOME_FEED_LIST_DATA}
       keyExtractor={item => item.id}
+      renderItem={() => null}
       contentContainerStyle={styles.homeListContent}
       ItemSeparatorComponent={null}
       onRefresh={onRefresh}
@@ -1877,61 +1931,70 @@ function HomeFeedList({
       ListEmptyComponent={null}
       ListHeaderComponent={
         homeHeadlines.length > 0 ? (
-          <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
-            <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
-              शीर्ष समाचार
-            </Text>
+          <View>
+            <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
+              <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
+                शीर्ष समाचार
+              </Text>
+            </View>
+            <View style={styles.headlinePane}>
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+                style={{maxHeight: headlinesPaneMaxHeight}}>
+                {homeHeadlines.map(item => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => onOpenBreaking(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.title}
+                    style={({pressed}) => [
+                      styles.headlineRow,
+                      {
+                        backgroundColor: palette.background,
+                        borderBottomColor: palette.border,
+                        opacity: pressed ? 0.7 : 1,
+                      },
+                    ]}>
+                    <Text
+                      style={[styles.headlineRowTitle, {color: palette.text}]}
+                      numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Pressable
+                      onPress={() => onShareHeadline(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Share ${item.title}`}
+                      hitSlop={8}
+                      style={styles.headlineShareBtn}>
+                      <Image
+                        source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
+                        style={styles.headlineShareImg}
+                        resizeMode="contain"
+                      />
+                    </Pressable>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={onOpenHeadlinesPage}
+                  accessibilityRole="button"
+                  accessibilityLabel={MORE_HEADLINES_LABEL}
+                  style={({pressed}) => [
+                    styles.moreHeadlinesBtn,
+                    {opacity: pressed ? 0.6 : 1},
+                  ]}>
+                  <Text style={[styles.moreHeadlinesText, {color: palette.textSecondary}]}>
+                    {MORE_HEADLINES_LABEL}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            </View>
           </View>
         ) : null
       }
-      renderItem={({item}) => (
-        <Pressable
-          onPress={() => onOpenBreaking(item)}
-          accessibilityRole="button"
-          accessibilityLabel={item.title}
-          style={({pressed}) => [
-            styles.headlineRow,
-            {
-              backgroundColor: palette.background,
-              borderBottomColor: palette.border,
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}>
-          <Text
-            style={[styles.headlineRowTitle, {color: palette.text}]}
-            numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Pressable
-            onPress={() => onShareHeadline(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Share ${item.title}`}
-            hitSlop={8}
-            style={styles.headlineShareBtn}>
-            <Image
-              source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
-              style={styles.headlineShareImg}
-              resizeMode="contain"
-            />
-          </Pressable>
-        </Pressable>
-      )}
       ListFooterComponent={
         <View style={styles.homeFooterWrap}>
-          {homeHeadlines.length > 0 ? (
-            <Pressable
-              onPress={onOpenHeadlinesPage}
-              accessibilityRole="button"
-              accessibilityLabel={MORE_HEADLINES_LABEL}
-              style={({pressed}) => [
-                styles.moreHeadlinesBtn,
-                {opacity: pressed ? 0.6 : 1},
-              ]}>
-              <Text style={[styles.moreHeadlinesText, {color: palette.textSecondary}]}>
-                {MORE_HEADLINES_LABEL}
-              </Text>
-            </Pressable>
-          ) : null}
           <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
             <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
               ताजा समाचार
@@ -1961,15 +2024,15 @@ function HomeFeedList({
                   accessibilityRole="button"
                   accessibilityLabel={`${section.label} — सबै हेर्नुहोस्`}
                   style={[
-                    styles.homeSectionHeader,
+                    styles.homeRibbon,
                     styles.homeSectionHeaderFooter,
-                    styles.homeSectionHeaderRow,
+                    styles.homeRibbonRow,
                     {backgroundColor: palette.accent},
                   ]}>
-                  <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+                  <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
                     {section.label}
                   </Text>
-                  <Text style={[styles.homeSectionSeeAllText, {color: palette.onAccent}]}>
+                  <Text style={[styles.homeRibbonSeeAll, {color: palette.onAccent}]}>
                     सबै हेर्नुहोस् {'\u203A'}
                   </Text>
                 </Pressable>
@@ -2038,11 +2101,11 @@ function HomeFeedList({
             <>
               <View
                 style={[
-                  styles.homeSectionHeader,
+                  styles.homeRibbon,
                   styles.homeSectionHeaderFooter,
                   {backgroundColor: palette.accent},
                 ]}>
-                <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+                <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
                   Contact Us
                 </Text>
               </View>
@@ -2076,11 +2139,11 @@ function HomeFeedList({
           ) : null}
           <View
             style={[
-              styles.homeSectionHeader,
+              styles.homeRibbon,
               styles.homeSectionHeaderFooter,
               {backgroundColor: palette.accent},
             ]}>
-            <Text style={[styles.homeSectionHeaderText, {color: palette.onAccent}]}>
+            <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
               About
             </Text>
           </View>
@@ -2131,6 +2194,7 @@ function HeadlinesList({
     <FlatList
       data={items}
       keyExtractor={item => item.id}
+      initialNumToRender={items.length || 10}
       contentContainerStyle={styles.homeListContent}
       ListHeaderComponent={
         <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
@@ -2523,33 +2587,51 @@ const styles = StyleSheet.create({
   },
   drawerSafeArea: {flex: 1},
   drawerHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  drawerBrandHit: {
+    width: '86%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerBrand: {
+    width: '100%',
+    aspectRatio: 201 / 88,
+  },
+  drawerCloseAbs: {
+    position: 'absolute',
+    right: 10,
+    top: 8,
+    zIndex: 2,
+  },
+  drawerThemeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  drawerBrandHit: {paddingVertical: 4, paddingRight: 12},
-  drawerBrand: {height: 30, width: Math.round(30 * (201 / 88))},
-  drawerThemeRow: {
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    alignItems: 'flex-start',
+    paddingVertical: 6,
   },
-  drawerBody: {paddingVertical: 8, paddingBottom: 24},
+  drawerBody: {paddingBottom: 16},
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 8,
   },
   drawerItemDot: {width: 6, height: 6, borderRadius: 3},
   drawerItemIcon: {width: 20, height: 20},
-  drawerItemText: {fontSize: scaleFont(16), flex: 1},
-  drawerDivider: {height: StyleSheet.hairlineWidth, marginVertical: 6},
+  drawerItemTextWrap: {flex: 1},
+  drawerItemText: {fontSize: scaleFont(15)},
+  drawerItemSublabel: {fontSize: scaleFont(12), fontWeight: '600', marginTop: 1},
+  drawerHairline: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+  },
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   loading: {marginTop: 10, color: Colors.textSecondary},
   error: {color: Colors.accent, textAlign: 'center', paddingHorizontal: 20},
@@ -2828,8 +2910,9 @@ const styles = StyleSheet.create({
   homeListContent: {
     paddingBottom: 36,
   },
-  /** Slim ribbons for शीर्ष समाचार / ताजा समाचार (item 5). Below-the-fold
-   *  category headers keep `homeSectionHeader` so those sections stay as-is. */
+  /** Slim ribbon shared by शीर्ष समाचार, ताजा समाचार, and below-the-fold
+   *  section headers (politics, economy, …). “Open more” sits on the
+   *  same row so those bars stay the same height. */
   homeRibbon: {
     paddingHorizontal: 16,
     paddingVertical: isIPad ? 7 : 5,
@@ -2838,27 +2921,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: scaleFont(isIPad ? 19 : 16),
     letterSpacing: 0.2,
+    flexShrink: 1,
   },
-  homeSectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: isIPad ? 14 : 10,
-  },
-  homeSectionHeaderFooter: {
-    marginTop: 22,
-  },
-  homeSectionHeaderRow: {
+  homeRibbonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  homeSectionSeeAllText: {
+  homeRibbonSeeAll: {
     fontWeight: '700',
     fontSize: scaleFont(isIPad ? 14 : 12),
+    flexShrink: 0,
   },
-  homeSectionHeaderText: {
-    fontWeight: '800',
-    fontSize: scaleFont(isIPad ? 22 : 18),
-    letterSpacing: 0.2,
+  homeSectionHeaderFooter: {
+    marginTop: 22,
   },
   breakingWrap: {
     marginBottom: 4,
@@ -2884,6 +2961,9 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(isIPad ? 15 : 13),
     fontWeight: '700',
     lineHeight: scaleFont(isIPad ? 21 : 18),
+  },
+  headlinePane: {
+    flexGrow: 0,
   },
   headlineRow: {
     flexDirection: 'row',

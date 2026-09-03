@@ -4,7 +4,7 @@ Upload guide for **Baahrakhari** (`com.baahrakhari.media`).
 
 | | |
 |---|---|
-| **Current AAB** | `1.3.0` / `versionCode 130` — **built** (production version bump) |
+| **Current AAB** | `1.4.0` / `versionCode 131` — Prateek home/drawer cut (local `gradle.properties`) |
 | **AAB file** | `android/app/build/outputs/bundle/release/app-release.aab` (~37 MB) |
 | **Built** | 2026-07-20 |
 | **Upload steps** | see `docs/play-store/UPLOAD_NEW_RELEASE.md` |
@@ -17,7 +17,7 @@ Upload guide for **Baahrakhari** (`com.baahrakhari.media`).
 
 ## Quick upload checklist
 
-- [ ] `android/gradle.properties` → `APP_VERSION_CODE=130`, `APP_VERSION_NAME=1.3.0` (bump both if a higher versionCode was already uploaded)
+- [ ] `android/gradle.properties` → `APP_VERSION_CODE=131`, `APP_VERSION_NAME=1.4.0` (bump both if a higher versionCode was already uploaded)
 - [ ] Build AAB (see **Build** below)
 - [ ] Device smoke test: Contact page, home footer link, share icon while swiping
 - [ ] Play Console → **Store settings** → website, email, phone (see table below)
@@ -60,9 +60,9 @@ Must match [https://baahrakhari.com/contact](https://baahrakhari.com/contact) an
 
 ## App changes in 1.2.7 (verify on release build)
 
-- [ ] **Contact Us** entry in the burger/side-drawer menu (label
-  **सम्पर्क गर्नुहोस् / Contact us** — Nepali first, English kept on the
-  same line so Play reviewers can still find “Contact us”); shown on
+- [ ] **Contact Us** entry in the burger/side-drawer menu (two lines:
+  **सम्पर्क गर्नुहोस्** then **Contact us** — Nepali first, English kept
+  visible so Play reviewers can still find “Contact us”); shown on
   **Android and iOS**
 - [ ] **Home feed footer** — dedicated **Contact Us** section (phone + email
   preview, **English-only** copy), shown on the front page on **Android only**
@@ -81,8 +81,8 @@ Must match [https://baahrakhari.com/contact](https://baahrakhari.com/contact) an
 ### Where reviewers find Contact Us
 
 1. **Android:** Home feed (front page) → scroll to footer → **Contact Us** (shows phone + email), **or**
-2. **Android & iOS:** Tap the burger menu (☰) → **सम्पर्क गर्नुहोस् / Contact us**
-   in the category list (English “Contact us” is visible on that same line)
+2. **Android & iOS:** Tap the burger menu (☰) → **सम्पर्क गर्नुहोस्** /
+   **Contact us** (two lines; English “Contact us” is visible on the second line)
 
 iOS intentionally does not show the front-page footer Contact Us section —
 per product decision, iOS keeps Contact Us in the burger menu only. This
@@ -97,8 +97,8 @@ Set signing in `android/gradle.properties` (local only — do not commit passwor
 
 ```properties
 APP_APPLICATION_ID=com.baahrakhari.media
-APP_VERSION_CODE=130
-APP_VERSION_NAME=1.3.0
+APP_VERSION_CODE=131
+APP_VERSION_NAME=1.4.0
 MYAPP_UPLOAD_STORE_FILE=/path/to/12khari.jks
 MYAPP_UPLOAD_KEY_ALIAS=abp
 MYAPP_UPLOAD_STORE_PASSWORD=***

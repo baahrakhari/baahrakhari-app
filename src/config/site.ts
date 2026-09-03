@@ -26,7 +26,12 @@ export const APP_PUBLISHER = {
   legalNameNepali: 'बाह्रखरी मिडिया प्रा. लि.',
 } as const;
 
-export const NEWS_CATEGORIES: Array<{slug: CategoryKey; label: string}> = [
+export const NEWS_CATEGORIES: Array<{
+  slug: CategoryKey;
+  label: string;
+  /** English second line in the drawer (Play-visible “Contact us”). */
+  labelEn?: string;
+}> = [
   {slug: 'latest-news', label: 'पछिल्ला'},
   {slug: 'politics', label: 'राजनीति'},
   {slug: 'economy', label: 'अर्थ'},
@@ -37,12 +42,17 @@ export const NEWS_CATEGORIES: Array<{slug: CategoryKey; label: string}> = [
   {slug: 'editorial', label: 'सम्पादकीय'},
   {slug: 'international', label: 'विदेश'},
   /**
-   * Dedicated Contact Us page (not a scrape feed). Nepali first, English
-   * kept on the same line so Play News reviewers can still find "Contact us".
-   * Android home-footer copy stays English-only (`Contact Us`).
+   * Dedicated Contact Us page (not a scrape feed). Drawer renders Nepali
+   * then English on two lines so Play News reviewers can still find
+   * "Contact us". Android home-footer copy stays English-only (`Contact Us`).
    */
-  {slug: 'contact-us', label: 'सम्पर्क गर्नुहोस् / Contact us'},
+  {slug: 'contact-us', label: 'सम्पर्क गर्नुहोस्', labelEn: 'Contact us'},
 ];
+
+/** Category rows in the burger menu — Contact is rendered separately (two lines). */
+export const DRAWER_FEED_CATEGORIES = NEWS_CATEGORIES.filter(
+  cat => cat.slug !== 'contact-us',
+);
 
 /** External pages linked from the site's header/footer. */
 export const INFO_LINKS: Array<{key: 'about' | 'team'; label: string; url: string}> = [

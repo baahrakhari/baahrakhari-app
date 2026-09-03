@@ -15,7 +15,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import React from 'react';
-import {Platform} from 'react-native';
+import {Platform, StyleSheet} from 'react-native';
 import App from '../App';
 import {APP_PUBLISHER} from '../src/config/site';
 import type {Article} from '../src/types/article';
@@ -111,10 +111,19 @@ function settleAnimations() {
   });
 }
 
+/** Host-component types under a node, document order (Text before Image, etc.). */
+function hostTypeOrder(node: {findAll: (pred: (n: {type: unknown}) => boolean) => Array<{type: unknown}>}): string[] {
+  return node
+    .findAll(() => true)
+    .map(n => n.type)
+    .filter((t): t is string => typeof t === 'string');
+}
+
 describe('home feed', () => {
   it('lists the ताजा समाचार headlines', async () => {
     await renderApp();
 
+    expect(screen.queryByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeNull();
     expect(screen.getAllByText('ताजा समाचार').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('समाचार 102')).toBeTruthy();
     expect(screen.getByLabelText('समाचार 103')).toBeTruthy();
@@ -143,7 +152,7 @@ describe('home feed', () => {
     expect(screen.getByLabelText('समाचार 101')).toBeTruthy();
   });
 
-  it('shows compact शीर्ष समाचार rows and opens a story in the reader overlay', async () => {
+  it('shows a शीर्ष समाचार ribbon and compact headline rows, then opens a story in the reader overlay', async () => {
     mockSections = {
       breaking: [article('900', {title: 'ब्रेकिंग शीर्षक', bodyText: 'ब्रेकिंग पूरा पाठ'})],
       sections: [],
@@ -152,8 +161,10 @@ describe('home feed', () => {
 
     await renderApp();
 
-    expect(screen.getByText('शीर्ष समाचार')).toBeTruthy();
+    expect(screen.queryByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeNull();
+    expect(screen.getAllByText('शीर्ष समाचार').length).toBeGreaterThan(0);
     expect(screen.queryByText('ब्रेकिंग')).toBeNull();
+    expect(screen.getByLabelText('थप शीर्ष समाचार...')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('ब्रेकिंग शीर्षक'));
 
     await waitFor(() => expect(screen.getByText('ब्रेकिंग पूरा पाठ')).toBeTruthy());
@@ -167,9 +178,9 @@ describe('home feed', () => {
     expect(screen.queryByLabelText('थप शीर्ष समाचार...')).toBeNull();
   });
 
-  it('caps home headlines at 6 and opens the full list from थप शीर्ष समाचार...', async () => {
+  it('caps home headlines at 12 and opens the full list from थप शीर्ष समाचार...', async () => {
     mockSections = {
-      breaking: Array.from({length: 8}, (_, i) =>
+      breaking: Array.from({length: 14}, (_, i) =>
         article(`9${i}`, {title: `शीर्षक ${i + 1}`}),
       ),
       sections: [],
@@ -178,17 +189,22 @@ describe('home feed', () => {
 
     await renderApp();
 
+    expect(screen.getAllByText('शीर्ष समाचार').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeNull();
     expect(screen.getByLabelText('शीर्षक 1')).toBeTruthy();
-    expect(screen.getByLabelText('शीर्षक 6')).toBeTruthy();
-    expect(screen.queryByLabelText('शीर्षक 7')).toBeNull();
+    expect(screen.getByLabelText('शीर्षक 12')).toBeTruthy();
+    expect(screen.queryByLabelText('शीर्षक 13')).toBeNull();
+    expect(screen.getByLabelText('थप शीर्ष समाचार...')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('थप शीर्ष समाचार...'));
 
-    await waitFor(() => expect(screen.getByLabelText('शीर्षक 7')).toBeTruthy());
-    expect(screen.getByLabelText('शीर्षक 8')).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('शीर्षक 13')).toBeTruthy());
+    expect(screen.getByLabelText('शीर्षक 14')).toBeTruthy();
+    expect(screen.getAllByText('शीर्ष समाचार').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('गृहपृष्ठ'));
-    await waitFor(() => expect(screen.queryByLabelText('शीर्षक 7')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('शीर्षक 13')).toBeNull());
   });
 
   it('shares a home headline from its row icon', async () => {
@@ -227,6 +243,8 @@ describe('home feed', () => {
     await waitFor(() =>
       expect(useArticleFeedMock).toHaveBeenLastCalledWith('politics'),
     );
+    expect(screen.getByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeTruthy();
+    expect(screen.getByText('राजनीति')).toBeTruthy();
   });
 });
 
@@ -241,6 +259,8 @@ describe('burger menu', () => {
 
     await waitFor(() => expect(useArticleFeedMock).toHaveBeenLastCalledWith('sport'));
     await settleAnimations();
+    expect(screen.getByLabelText('श्रेणी परिवर्तन गर्नुहोस्')).toBeTruthy();
+    expect(screen.getByText('खेल')).toBeTruthy();
   });
 
   it('uses the drawer logo as Home and has no extra ताजा समाचार row', async () => {
@@ -295,6 +315,38 @@ describe('burger menu', () => {
       'sport',
     );
   });
+
+  it('places saved under theme, label then bookmark, and Contact on two lines', async () => {
+    await renderApp();
+
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('सुरक्षित लेखहरू')).toBeTruthy());
+
+    const labels = screen
+      .getAllByRole('button')
+      .map(node => node.props.accessibilityLabel)
+      .filter((label): label is string => typeof label === 'string');
+    expect(labels.indexOf('Dark theme')).toBeGreaterThanOrEqual(0);
+    expect(labels.indexOf('सुरक्षित लेखहरू')).toBeGreaterThan(labels.indexOf('Dark theme'));
+    expect(labels.indexOf('पछिल्ला')).toBeGreaterThan(labels.indexOf('सुरक्षित लेखहरू'));
+    expect(labels.indexOf('सम्पर्क गर्नुहोस् / Contact us')).toBeGreaterThan(
+      labels.indexOf('पछिल्ला'),
+    );
+
+    const themeRowStyle = StyleSheet.flatten(
+      screen.getByTestId('drawer-theme-toggle').props.style,
+    );
+    expect(themeRowStyle.flexDirection).toBe('row');
+    expect(themeRowStyle.justifyContent).toBe('flex-end');
+
+    const savedOrder = hostTypeOrder(screen.getByLabelText('सुरक्षित लेखहरू'));
+    expect(savedOrder.indexOf('Text')).toBeGreaterThanOrEqual(0);
+    expect(savedOrder.indexOf('Image')).toBeGreaterThan(savedOrder.indexOf('Text'));
+
+    expect(screen.getByText('सम्पर्क गर्नुहोस्')).toBeTruthy();
+    expect(screen.getByText('Contact us')).toBeTruthy();
+    await settleAnimations();
+  });
 });
 
 describe('saved articles', () => {
@@ -347,9 +399,11 @@ describe('Contact Us placement', () => {
     expect(screen.queryByLabelText('सम्पर्क गर्नुहोस् / Contact us')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
-    await waitFor(() =>
-      expect(screen.getByLabelText('सम्पर्क गर्नुहोस् / Contact us')).toBeTruthy(),
-    );
+    await waitFor(() => {
+      expect(screen.getByText('सम्पर्क गर्नुहोस्')).toBeTruthy();
+      expect(screen.getByText('Contact us')).toBeTruthy();
+      expect(screen.getByLabelText('सम्पर्क गर्नुहोस् / Contact us')).toBeTruthy();
+    });
 
     fireEvent.press(screen.getByLabelText('सम्पर्क गर्नुहोस् / Contact us'));
 
@@ -361,6 +415,20 @@ describe('Contact Us placement', () => {
 });
 
 describe('theme toggle', () => {
+  it('sits on the right edge of its drawer row', async () => {
+    await renderApp();
+
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() => expect(screen.getByTestId('drawer-theme-toggle')).toBeTruthy());
+
+    const style = StyleSheet.flatten(
+      screen.getByTestId('drawer-theme-toggle').props.style,
+    );
+    expect(style.flexDirection).toBe('row');
+    expect(style.justifyContent).toBe('flex-end');
+    await settleAnimations();
+  });
+
   it('flips between light and dark from the drawer', async () => {
     await renderApp();
 

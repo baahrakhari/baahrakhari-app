@@ -41,5 +41,5 @@ so keep it short and accurate rather than duplicating doc content here.
 2. Contact Us placement is intentionally platform-specific (Google Play requires it, iOS doesn't need it repeated up front):
    - **Android:** front-page (home feed) footer **Contact Us** link (English-only) + burger-menu entry.
    - **iOS:** burger-menu entry only (no front-page footer link).
-   - Drawer label on both platforms: **सम्पर्क गर्नुहोस् / Contact us** (Nepali first, English on the same line).
+   - Drawer label on both platforms: **सम्पर्क गर्नुहोस्** then **Contact us** (two lines, Nepali first, English visible for Play).
    - Implemented via `Platform.OS === 'android'` in `App.tsx` (`HomeFeedList`). Details/checklist: `docs/play-store/NEWS_POLICY_COMPLIANCE.md`.
