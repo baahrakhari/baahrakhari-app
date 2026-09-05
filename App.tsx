@@ -5,6 +5,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  type ImageStyle,
   Linking,
   Modal,
   Pressable,
@@ -740,6 +741,7 @@ function AppBody(): React.JSX.Element {
           ]}>
           <View style={styles.headerLeft}>
             <Pressable
+              testID="header-burger"
               onPress={openDrawer}
               accessibilityRole="button"
               accessibilityLabel="मेनु खोल्नुहोस्"
@@ -1380,6 +1382,8 @@ function AppBody(): React.JSX.Element {
           visible={drawerVisible}
           anim={drawerAnim}
           width={Math.min(288, Math.round(width * 0.74))}
+          topInset={insets.top}
+          bottomInset={insets.bottom}
           palette={palette}
           category={category}
           isDark={isDark}
@@ -1422,7 +1426,9 @@ function DrawerItem({
   onPress,
   icon,
   iconEnd,
+  iconStyle,
   tintIcon = true,
+  testID,
 }: {
   label: string;
   sublabel?: string;
@@ -1432,19 +1438,22 @@ function DrawerItem({
   icon?: number;
   /** Bookmark on the right (saved-articles row). */
   iconEnd?: boolean;
+  iconStyle?: ImageStyle;
   tintIcon?: boolean;
+  testID?: string;
 }): React.JSX.Element {
   const accessibilityLabel = sublabel ? `${label} / ${sublabel}` : label;
   const iconEl = icon ? (
     <Image
       source={icon}
-      style={styles.drawerItemIcon}
+      style={[styles.drawerItemIcon, iconStyle]}
       resizeMode="contain"
       tintColor={tintIcon ? (active ? palette.accent : palette.text) : undefined}
     />
   ) : null;
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -1495,6 +1504,8 @@ function SideDrawer({
   visible,
   anim,
   width,
+  topInset,
+  bottomInset,
   palette,
   category,
   isDark,
@@ -1509,6 +1520,9 @@ function SideDrawer({
   visible: boolean;
   anim: Animated.Value;
   width: number;
+  /** From the root window — Modal's nested SafeAreaProvider is 0 on iOS 26. */
+  topInset: number;
+  bottomInset: number;
   palette: HomePalette;
   category: CategoryKey;
   isDark: boolean;
@@ -1522,11 +1536,15 @@ function SideDrawer({
 }): React.JSX.Element {
   const hairlineColor = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(128,128,128,0.85)';
   const contactCategory = NEWS_CATEGORIES.find(cat => cat.slug === 'contact-us');
+  const brandHeight = scaleFont(48);
+  const brandWidth = Math.min(
+    Math.round(brandHeight * (201 / 88)),
+    Math.max(120, width - 72),
+  );
+  const themeLabel = isDark ? 'उज्यालो मोड' : 'अँध्यारो मोड';
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      {/** Modal is a separate native window — nest a provider so top inset is real. */}
-      <SafeAreaProvider>
-        <View style={styles.drawerRoot}>
+      <View style={styles.drawerRoot}>
           <Animated.View style={[StyleSheet.absoluteFill, styles.drawerOverlay, {opacity: anim}]}>
             <Pressable
               style={StyleSheet.absoluteFill}
@@ -1551,9 +1569,14 @@ function SideDrawer({
                 ],
               },
             ]}>
-            <SafeAreaView edges={['top', 'bottom', 'left']} style={styles.drawerSafeArea}>
+            <View
+              style={[
+                styles.drawerSafeArea,
+                {paddingTop: topInset, paddingBottom: bottomInset},
+              ]}>
               <View style={styles.drawerHeader}>
                 <Pressable
+                  testID="drawer-brand"
                   onPress={() => {
                     onSelectHome();
                     onClose();
@@ -1565,7 +1588,7 @@ function SideDrawer({
                   <Image
                     source={ICON_BRAND_LONG}
                     resizeMode="contain"
-                    style={styles.drawerBrand}
+                    style={{width: brandWidth, height: brandHeight}}
                   />
                 </Pressable>
                 <Pressable
@@ -1587,6 +1610,11 @@ function SideDrawer({
                   styles.drawerThemeRow,
                   {opacity: pressed ? 0.7 : 1},
                 ]}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.drawerItemText, styles.drawerThemeLabel, {color: palette.text}]}>
+                  {themeLabel}
+                </Text>
                 <Image
                   source={isDark ? ICON_THEME_SUN : ICON_THEME_MOON}
                   style={styles.themeIcon}
@@ -1596,12 +1624,13 @@ function SideDrawer({
               </Pressable>
               <DrawerHairline color={hairlineColor} />
               <DrawerItem
+                testID="drawer-saved"
                 label="सुरक्षित लेखहरू"
                 active={isSaved}
                 palette={palette}
                 icon={isDark ? ICON_SAVE_ARTICLE_DARK : ICON_SAVE_ARTICLE}
                 iconEnd
-                tintIcon={false}
+                iconStyle={styles.drawerSavedIcon}
                 onPress={() => {
                   onSelectSaved();
                   onClose();
@@ -1659,10 +1688,9 @@ function SideDrawer({
                   }}
                 />
               </ScrollView>
-            </SafeAreaView>
+            </View>
           </Animated.View>
         </View>
-      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -1943,9 +1971,10 @@ function HomeFeedList({
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator
                 style={{maxHeight: headlinesPaneMaxHeight}}>
-                {homeHeadlines.map(item => (
+                {homeHeadlines.map((item, headlineIndex) => (
                   <Pressable
                     key={item.id}
+                    testID={headlineIndex === 0 ? 'home-headline-0' : undefined}
                     onPress={() => onOpenBreaking(item)}
                     accessibilityRole="button"
                     accessibilityLabel={item.title}
@@ -2568,7 +2597,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  themeIcon: {width: 24, height: 24},
+  themeIcon: {width: 28, height: 28},
   /** Side burger menu */
   drawerRoot: {flex: 1, flexDirection: 'row'},
   drawerOverlay: {
@@ -2587,6 +2616,7 @@ const styles = StyleSheet.create({
   },
   drawerSafeArea: {flex: 1},
   drawerHeader: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -2594,13 +2624,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   drawerBrandHit: {
-    width: '86%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  drawerBrand: {
-    width: '100%',
-    aspectRatio: 201 / 88,
   },
   drawerCloseAbs: {
     position: 'absolute',
@@ -2613,7 +2638,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 44,
+  },
+  drawerThemeLabel: {
+    flex: 1,
+    fontWeight: '600',
+    paddingRight: 8,
   },
   drawerBody: {paddingBottom: 16},
   drawerItem: {
@@ -2624,7 +2655,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   drawerItemDot: {width: 6, height: 6, borderRadius: 3},
-  drawerItemIcon: {width: 20, height: 20},
+  drawerItemIcon: {width: 22, height: 22},
+  drawerSavedIcon: {width: 36, height: 36},
   drawerItemTextWrap: {flex: 1},
   drawerItemText: {fontSize: scaleFont(15)},
   drawerItemSublabel: {fontSize: scaleFont(12), fontWeight: '600', marginTop: 1},

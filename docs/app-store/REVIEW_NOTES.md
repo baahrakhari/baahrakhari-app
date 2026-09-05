@@ -13,15 +13,16 @@ Reviewer can simply open the App and start reading.
 
 ## Demo path the reviewer can follow (30 seconds)
 
-1. Launch the App. The splash shows the 12khari mark over a faded Nepali
-   flag, then the feed loads.
-2. Swipe up/down — articles in the *पछिल्ला* (Latest) section.
-3. Tap any category chip (e.g. *खेल* / Sports) — the feed refilters.
-4. Tap an article hero image to open the full article view.
+1. Launch the App. After the splash, Home shows the Baahrakhari logo, the
+   Nepali date, a slim **शीर्ष समाचार** list (up to 12 rows), then a
+   **ताजा समाचार** horizontal strip.
+2. Tap the logo — returns to Home. Open the burger (top-left).
+3. In the drawer: theme (sun/moon), **सुरक्षित लेखहरू** (Saved), and
+   **सम्पर्क गर्नुहोस्** / **Contact us**. Categories are below.
+4. Tap a **शीर्ष समाचार** row or a **ताजा** card to open the article.
 5. Pinch on the article body — the Nepali type resizes.
-6. Tap the bookmark icon top-right — the article is saved to the read-later
-   list (icon button at top-left, the bookmark icon).
-7. Toggle the sun/moon icon top-right — switches light/dark theme.
+6. Tap the bookmark on the article to save it; open Saved from the drawer.
+7. Share from a headline row or from the article.
 
 ## Content-rights statement (relevant to Guideline 5.2.3)
 

@@ -174,7 +174,7 @@ def main() -> None:
                 f"    {va.get('versionString')} — {va.get('appStoreState')} ({va.get('platform')})"
             )
 
-    print("\nNext: upload build, then ASC → Baahrakhari → + Version → 1.1.0")
+    print("\nNext: upload build, then ASC → Baahrakhari → + Version → 1.4.0")
     print("  https://appstoreconnect.apple.com/apps")
 
 

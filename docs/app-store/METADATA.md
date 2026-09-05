@@ -27,7 +27,10 @@ Hard limits in parentheses are Apple's character caps.
 
 ---
 
-## Version 1.1.0 — Listing copy
+## Version 1.4.0 — Listing copy
+
+Live store version is **1.2.0**. This copy is for the **1.4.0** update
+(build 4). Checklist: [`IOS_RELEASE_CHECKLIST.md`](IOS_RELEASE_CHECKLIST.md).
 
 ### English (en-US)
 
@@ -76,13 +79,13 @@ news,nepal,nepali,kathmandu,समाचार,बाह्रखरी,politics
 ```
 
 **Support URL** (required, must be live HTTPS):
-`https://baahrakhari.com/support`  *(create this page or point at a Notion / GitHub-Pages support page)*
+`https://baahrakhari.com/contact`  *(live. Prefer a dedicated `/support` page when it exists; `/support` 404'd on 2026-09-04.)*
 
 **Marketing URL** (optional):
 `https://baahrakhari.com`
 
 **Privacy Policy URL** (required):
-`https://baahrakhari.com/privacy`  *(host `PRIVACY.md` here — see PRIVACY.md)*
+`https://baahrakhari.com/page/privacy-policy`  *(live HTTPS, verified 2026-09-04)*
 
 **Copyright** (50):
 `© 2026 Baahrakhari Pvt. Ltd.`
@@ -128,32 +131,29 @@ news,nepal,nepali,kathmandu,समाचार,बाह्रखरी,politics
 
 ---
 
-## What's New in This Version — 1.1.0
+## What's New in This Version — 1.4.0
 
-Editable per-version field. Use this on first submit:
+Per-version field in App Store Connect. Matches the Android 1.4.0 notes
+(Prateek home/drawer cut). Ads were **not** added.
 
 ### en-US
 ```
-First public release of Baahrakhari for iPhone and iPad.
+Home screen now matches baahrakhari.com more closely.
 
-• Full Baahrakhari news feed across nine sections
-• Adaptive reading layout for iPhone and iPad
-• Pinch-to-zoom Nepali body type, your size is remembered
-• Offline-ready saved articles
-• Light and dark mode
-• Optional once-per-hour new-story reminder
+• Headlines occupy the top of Home (up to 12 rows) with a slim शीर्ष समाचार ribbon
+• ताजा समाचार stays as a larger horizontal strip underneath
+• Header is logo + Nepali date; theme and Saved live in the burger menu
+• Share from headline rows; Contact us in the drawer (Nepali then English)
 ```
 
 ### ne-NP
 ```
-iPhone र iPad का लागि बाह्रखरीको पहिलो सार्वजनिक संस्करण।
+गृहपृष्ठ अब baahrakhari.com सँग अझ मिल्दोजुल्दो छ।
 
-• नौ वटै शीर्षकको पूरै बाह्रखरी फिड
-• iPhone र iPad दुवैका लागि छुट्टै अनुकूलित ले-आउट
-• पिञ्च-टु-जुम — मनपर्ने अक्षर साइज याद रहन्छ
-• अफलाइनमा पनि खुल्ने सेभ गरिएका समाचार
-• उज्यालो र अध्यारो मोड
-• चाहिए मात्र — एक घण्टामा बढीमा एक पटक मात्र आउने सूचना
+• शीर्ष समाचार गृहपृष्ठको माथिल्लो भागमा (१२ सम्म) पातलो रिबनसहित
+• ताजा समाचार त्यस मुनि ठूलो तेर्सो स्ट्रिप
+• हेडरमा लोगो र नेपाली मिति; थिम र सुरक्षित लेखहरू बर्गर मेनुमा
+• शीर्ष समाचारमा सेयर; Contact us ड्रअरमा (नेपाली, त्यसपछि अंग्रेजी)
 ```
 
 ---
@@ -162,10 +162,10 @@ iPhone र iPad का लागि बाह्रखरीको पहिल�
 
 | Phase | Audience | Build | Notes |
 |---|---|---|---|
-| 0 | Internal TestFlight | 1.1.0 (1) | Just the team |
-| 1 | External TestFlight | 1.1.0 (1) | 50–100 invitees; collect feedback for ~1 week |
-| 2 | Phased App Store release | 1.1.0 (1) | 1% → 100% over 7 days (Apple default) |
-| 3 | Full availability | 1.1.0 (2)+ | Fixes from phase 1/2 reports |
+| 0 | Internal TestFlight | 1.4.0 (4) | Just the team |
+| 1 | External TestFlight | 1.4.0 (4) | Optional; extra beta review |
+| 2 | Phased App Store release | 1.4.0 (4) | 1% → 100% over 7 days (Apple default) |
+| 3 | Full availability | 1.4.0 (5)+ | Only if you need a follow-up build |
 
 In ASC → Version Release pick **"Automatically release this version using
 phased release for automatic updates"** for Phase 2.

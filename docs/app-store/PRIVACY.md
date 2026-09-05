@@ -10,7 +10,7 @@
 >   (convert with `pandoc PRIVACY.md -o PRIVACY.html`).
 > - **Vercel/Netlify**: deploy a tiny static site that serves this Markdown
 >   rendered to HTML.
-> - **Your own site**: paste this content at `https://baahrakhari.com/privacy`.
+> - **Your own site**: the live page is `https://baahrakhari.com/page/privacy-policy`.
 >
 > Whichever path you pick, paste that exact HTTPS URL in App Store Connect →
 > App Privacy → Privacy Policy URL.
@@ -65,15 +65,14 @@ information the server requires to serve a page:
 
 These requests do **not** include any account identifier or any reference
 that could let baahrakhari.com tie individual readers together over time.
-Baahrakhari's own [website privacy policy](https://baahrakhari.com/privacy)
+Baahrakhari's own [website privacy policy](https://baahrakhari.com/page/privacy-policy)
 governs how baahrakhari.com handles the IP address it sees.
 
 ---
 
 ## Third-party SDKs and trackers
 
-The App ships with **no third-party analytics or advertising SDKs**. The full
-runtime dependency list (as of v1.1.0) is:
+The App ships with **no third-party analytics or advertising SDKs**. The runtime dependency list (as of v1.4.0) is:
 
 - `@react-native-async-storage/async-storage` — local key-value storage on your device
 - `@react-native-community/push-notification-ios` — local notifications only

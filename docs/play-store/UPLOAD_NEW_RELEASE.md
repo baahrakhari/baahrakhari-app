@@ -6,24 +6,36 @@ build through Google Play Console. Use this every time you cut a release;
 covers the News & Magazines policy checklist — this doc is the Play Console
 click-through itself.
 
+**Wizard (preferred):** run `npm run play:wizard` (or
+`./scripts/play_upload_wizard.sh`). It asks for the AAB path, expected
+versionName / versionCode, optional rebuild, and track, then verifies the
+signed bundle before you click Upload. It does **not** upload. Full notes:
+`docs/play-store/PLAY_UPLOAD_WIZARD.md`. After verify, paste the connected
+listing fields from `docs/play-store/PLAY_CONSOLE_ACCOUNT.md`.
+
 ## Current release snapshot
 
 | | |
 |---|---|
-| **Version** | `1.3.0` / `versionCode 130` |
+| **Version** | `1.4.0` / `versionCode 131` |
 | **Package (applicationId)** | `com.baahrakhari.media` |
 | **AAB** | `android/app/build/outputs/bundle/release/app-release.aab` (~37 MB) |
+| **Absolute AAB path** | `/Users/praak/cursor_12KHARI/baahrakhari-app/android/app/build/outputs/bundle/release/app-release.aab` |
 | **APK** (local test only, not for Play) | `android/app/build/outputs/apk/release/app-release.apk` |
+| **targetSdk** | `36` |
 | **Keystore** | `/Users/praak/AndroidStudioProjects/certs/12khari.jks` (alias `abp`) |
 | **Signing values** | `android/gradle.properties` (`MYAPP_UPLOAD_*`, local only — never commit) |
-| **Release notes copy** | `docs/play-store/RELEASE_NOTES.md` (section matching the version above) |
+| **Release notes copy** | `docs/play-store/RELEASE_NOTES.md` (section **1.4.0**) |
 | **News policy checklist** | `docs/play-store/NEWS_POLICY_COMPLIANCE.md` |
 | **Deobfuscation warning context** | `docs/play-store/DEOBFUSCATION_NOTE.md` |
+| **Play API / Fastlane** | **Not configured** — Console upload only |
+| **Default first track** | **Internal testing** (save draft). Production materials are ready; do **not** start a production rollout until internal verify. |
 
 `versionCode` must strictly increase on **every** Play upload — Play rejects
 a re-upload of a versionCode it has already seen on that track (even as a
 draft). If in doubt whether the last build was actually submitted, bump the
-code again rather than reusing it.
+code again rather than reusing it. Last live Android cut was `1.3.0` /
+`versionCode 130`; this AAB is `131`.
 
 ---
 
@@ -48,9 +60,9 @@ Sanity-check the artifact before uploading:
 # Confirms the jar signature is valid (expect "jar verified.")
 jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab
 
-# Confirms the versionCode/versionName baked into the bundle
-unzip -p android/app/build/outputs/bundle/release/app-release.aab \
-  base/manifest/AndroidManifest.xml | strings | grep -E "^[0-9]+\.[0-9]+\.[0-9]+|^[0-9]{3}\""
+# Confirms package / versionCode / versionName / targetSdk on the sibling APK
+$ANDROID_HOME/build-tools/36.0.0/aapt dump badging \
+  android/app/build/outputs/apk/release/app-release.apk | grep -E 'package:|sdkVersion|targetSdkVersion'
 ```
 
 ## 2. Sign in to Play Console
@@ -78,12 +90,19 @@ Play Console → **App content → News and magazine apps**:
 
 ## 5. Open the release track
 
-Play Console → **Release → Production** (or **Testing → Closed/Open testing**
-if you're staging first).
+**Recommended first upload:** Play Console → **Release → Testing → Internal
+testing**. Use an existing unpublished draft on that track if one is already
+open.
+
+**Production upgrade (after internal verify):** Play Console → **Release →
+Production**. Prefer **Promote release** from Internal testing so you reuse
+`versionCode 131` instead of uploading a second bundle.
 
 - If there's a rejected/blocked release already in the track, open that
   same release to upload the replacement bundle into it.
 - Otherwise: **Create new release**.
+- Do **not** guess which production track/status is live — if unsure, stay
+  on Internal testing and save a draft.
 
 ## 6. Upload the AAB
 
@@ -110,27 +129,36 @@ if you're staging first).
 
 - Play Console shows version code/name, target API level, and any
   warnings — confirm `versionCode`/`versionName` match what you expect
-  (`130` / `1.3.0` for this release).
+  (`131` / `1.4.0` for this release).
 - Fix any **blocking** errors before continuing (deobfuscation is the only
   expected warning today).
+- Confirm Play did **not** flag ads / Advertising ID. This cut has **no ad
+  SDK** (item 9 skipped). Do not declare ads in Data safety.
 
-## 9. Save and roll out
+## 9. Save — stop before production rollout
 
-- **Save** the release.
-- Back on the release track page: **Review release** → check the rollout
-  summary → **Start rollout to Production** (or the testing track you're
-  using).
-- For production, choose the rollout percentage (100% unless you're doing a
-  staged rollout).
+- **Save** the release (creates/updates a **draft**).
+- **Internal testing (default):** Review release → start rollout to
+  **internal testers only** if you want them to install from Play; or leave
+  it as a saved draft. This is not a production publish.
+- **Do not** click **Start rollout to Production** on this first pass unless
+  you have already verified the build on Internal testing (or a device APK)
+  and you intend to go live.
+- When you are ready for production: **Promote** the internal release, or
+  open Production → review summary → choose staged % or 100% → **Start
+  rollout to Production**.
 
 ## 10. Send for review (if prompted)
 
 - If this app/track requires it: **Publishing overview → Send changes for
   review**. Nothing goes live/to reviewers until this step is done.
+- Internal-testing uploads to testers you already listed often skip a full
+  production review; Production still needs review for a News app.
 - If a previous submission was rejected for policy reasons (e.g. the News &
   Magazines Contact Us issue), double-check the in-app changes described in
   `NEWS_POLICY_COMPLIANCE.md` are present in the build you just uploaded
-  before sending for review.
+  before sending for review. Confirm **Contact us** is still visible
+  (Android footer + bilingual drawer).
 
 ## 11. Track status
 
@@ -141,13 +169,17 @@ if you're staging first).
 
 ---
 
-## After a successful rollout
+## After a successful production rollout
 
-- [ ] Tag the release in git: `git tag v1.3.0 && git push origin v1.3.0`
-- [ ] Update `docs/play-store/RELEASE_NOTES.md` header table
-      (`Current release` row) to point at the version that's now live.
+Annotated tag `v1.4.0` points at `fbd08aa` and is on **origin** (with `main`).
+After Play accepts the production release:
+
+- [ ] Git tag/branch already pushed for 1.4.0 — only push again if you cut a
+      newer commit/tag
+- [ ] Do **not** commit `android/gradle.properties` (signing secrets)
+- [ ] `RELEASE_NOTES.md` header already lists `1.4.0` / `131`
 - [ ] Note in `NEWS_POLICY_COMPLIANCE.md` if this resolved an open appeal
-      case.
+      case (`3-4690000040664`)
 
 ## Rollback
 

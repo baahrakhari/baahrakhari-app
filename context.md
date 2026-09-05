@@ -13,9 +13,12 @@ Full index: `docs/README.md`. Highlights:
   `docs/RELEASE_READINESS.md`
 - Google Play policy + Contact Us placement (source of truth for where
   Contact Us lives per platform): `docs/play-store/NEWS_POLICY_COMPLIANCE.md`
-- Uploading a new Play Store release (step-by-step Play Console flow):
+- Uploading a new Play Store release: `npm run play:wizard`
+  (`docs/play-store/PLAY_UPLOAD_WIZARD.md`); paste packet for the connected
+  listing: `docs/play-store/PLAY_CONSOLE_ACCOUNT.md`; Console click-through:
   `docs/play-store/UPLOAD_NEW_RELEASE.md`
-- App Store metadata/review: `docs/app-store/`
+- App Store 1.4.0 production cut: `docs/app-store/IOS_RELEASE_CHECKLIST.md`
+  (metadata/review: `docs/app-store/`)
 - Deep linking: `docs/DEEP_LINKING.md`
 - Embedded article videos (open in YouTube app / browser, never in-app):
   `docs/VIDEO_EMBEDS.md`

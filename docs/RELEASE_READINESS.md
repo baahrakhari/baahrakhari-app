@@ -4,8 +4,8 @@
 
 | Platform | Identifier | Version |
 |---|---|---|
-| Android (Play) | `com.baahrakhari.media` | **1.2.6** (`versionCode 126`) |
-| iOS (App Store) | `com.baahrakhari` | 1.1.0+ (see `docs/app-store/`) |
+| Android (Play) | `com.baahrakhari.media` | **1.4.0** (`versionCode 131`) |
+| iOS (App Store) | `com.baahrakhari` | **1.4.0** (build **4**). Live store version is **1.2.0**. See `docs/app-store/IOS_RELEASE_CHECKLIST.md` |
 
 Display name: **Baahrakhari**
 
@@ -28,17 +28,16 @@ Policy resubmission after appeal case **3-4690000040664** (News & Magazines).
 
 ---
 
-## Features in this Android release (1.2.6)
+## Features in this Android release (1.4.0)
 
-- Full Baahrakhari feed with adaptive prefetch and pull-to-refresh
-- Pinch-to-zoom article text with remembered size
-- Saved articles for offline reading
-- Optional local new-story alerts (off by default)
-- Light / dark mode
-- **Contact Us** page (policy compliance) with English contact copy
-- Home feed footer **Contact Us** link (Android only, front page, Google Play requirement); burger-menu **Contact Us** entry on Android and iOS
-- Publisher attribution on articles (author or Baahrakhari)
-- Share icon rendering fix on Android
+Prateek home/drawer cut — see `docs/RELEASE_CHECKLIST.md` and
+`docs/play-store/RELEASE_NOTES.md`. Highlights:
+
+- Home: up to 12 vertical **शीर्ष समाचार** rows + **ताजा समाचार** horizontal strip
+- Slim ribbons; header is logo + Nepali date
+- Theme and Saved in the burger; bilingual **Contact us** drawer row
+- Android home footer **Contact Us** (Play News policy)
+- **No ads** this cut (item 9 skipped) — do not claim ads in Play Data safety
 
 ---
 
@@ -51,7 +50,7 @@ Local `android/gradle.properties` (do not commit secrets):
 - `MYAPP_UPLOAD_STORE_FILE` → `12khari.jks`
 - `MYAPP_UPLOAD_KEY_ALIAS` → `abp`
 - `MYAPP_UPLOAD_STORE_PASSWORD` / `MYAPP_UPLOAD_KEY_PASSWORD`
-- `APP_VERSION_CODE=126`, `APP_VERSION_NAME=1.2.6`
+- `APP_VERSION_CODE=131`, `APP_VERSION_NAME=1.4.0`
 
 ### Play Console (before Send for review)
 
@@ -61,7 +60,8 @@ Local `android/gradle.properties` (do not commit secrets):
 
 ### iOS signing
 
-- Xcode team + provisioning for `com.baahrakhari`
+- Xcode team **Baahrakhari Media** (`WGWJBSHXG5`) + automatic signing for `com.baahrakhari`
+- Production cut: `docs/app-store/IOS_RELEASE_CHECKLIST.md`
 
 ---
 
@@ -85,7 +85,8 @@ cd android && ./gradlew bundleRelease
 # Android APK (quick test)
 cd android && ./gradlew assembleRelease
 
-# iOS — Xcode Product → Archive
+# iOS — App Store archive (see docs/app-store/IOS_RELEASE_CHECKLIST.md)
+SKIP_UPLOAD=1 ./scripts/ios_archive_upload.sh
 ```
 
 ---
@@ -96,6 +97,7 @@ cd android && ./gradlew assembleRelease
 2. Update `docs/play-store/RELEASE_NOTES.md`
 3. Build AAB and install APK on a real device
 4. Run smoke tests (feed, Contact, share icon, offline save)
-5. Update Play Console listing + News declaration
-6. Upload AAB, paste release notes, **Send for review**
-7. Tag: `git tag v1.2.6`
+5. Update Play Console listing + News declaration; confirm Data safety has no ads
+6. Upload AAB to **Internal testing** (or draft), paste **1.4.0** notes, **Save**
+7. After verify: Production rollout + **Send for review** if prompted
+8. Push git when ready: local tag `v1.4.0` already exists (`git push origin v1.4.0`)

@@ -35,28 +35,40 @@ the one-line pointer in the repo-root `context.md`) in the same change.
 
 ## Google Play (Android)
 
+- [`play-store/PLAY_UPLOAD_WIZARD.md`](play-store/PLAY_UPLOAD_WIZARD.md) —
+  interactive wizard (`npm run play:wizard`) that asks for AAB path and
+  version, verifies the signed bundle, then prints Console steps. Start
+  here when uploading a new Play build.
+- [`play-store/PLAY_CONSOLE_ACCOUNT.md`](play-store/PLAY_CONSOLE_ACCOUNT.md) —
+  values to paste into the already-connected Play listing (Store settings,
+  News declaration, Data safety, What's new) after the wizard verifies.
 - [`play-store/UPLOAD_NEW_RELEASE.md`](play-store/UPLOAD_NEW_RELEASE.md) —
   step-by-step Play Console click-through for uploading a new release
   (build AAB, open the release track, upload, release notes, rollout,
-  send for review). Start here when actually publishing a build.
+  send for review). The wizard walks this same flow.
 - [`play-store/NEWS_POLICY_COMPLIANCE.md`](play-store/NEWS_POLICY_COMPLIANCE.md) —
   Play Console upload checklist for the News & Magazines policy
   resubmission, including **where Contact Us lives in the app** (this is
   the source of truth for Contact Us placement — keep it in sync with
   `App.tsx` whenever that changes).
 - [`play-store/RELEASE_NOTES.md`](play-store/RELEASE_NOTES.md) — copy-paste
-  "what's new" text (en + ne) per version, for the Play Console listing.
+  "what's new" text (en + ne) per version, plus the **1.4.0** Play upgrade
+  packet (AAB path, pre-upload checklist, internal-testing-first Console
+  steps). Start here for the current Android Play cut.
 - [`play-store/DEOBFUSCATION_NOTE.md`](play-store/DEOBFUSCATION_NOTE.md) —
   R8/mapping-file warning context (informational only).
 
 ## Apple App Store (iOS)
 
+- [`app-store/IOS_RELEASE_CHECKLIST.md`](app-store/IOS_RELEASE_CHECKLIST.md) —
+  **start here** for the 1.4.0 production cut (archive, IPA verify,
+  TestFlight, listing, submit). Live store version is 1.2.0.
 - [`app-store/METADATA.md`](app-store/METADATA.md) — App Store Connect
   listing metadata.
 - [`app-store/PRIVACY.md`](app-store/PRIVACY.md) — privacy/data-use
   declarations.
-- [`app-store/PRELAUNCH.md`](app-store/PRELAUNCH.md) — pre-submission
-  checklist.
+- [`app-store/PRELAUNCH.md`](app-store/PRELAUNCH.md) — enrollment /
+  first-launch checklist (legal, signing, screenshots).
 - [`app-store/REVIEW_NOTES.md`](app-store/REVIEW_NOTES.md) — notes for App
   Review.
 

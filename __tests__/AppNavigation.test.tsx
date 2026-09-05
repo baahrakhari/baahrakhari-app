@@ -15,7 +15,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import React from 'react';
-import {Platform, StyleSheet} from 'react-native';
+import {Image, Platform, StyleSheet} from 'react-native';
 import App from '../App';
 import {APP_PUBLISHER} from '../src/config/site';
 import type {Article} from '../src/types/article';
@@ -338,10 +338,24 @@ describe('burger menu', () => {
     );
     expect(themeRowStyle.flexDirection).toBe('row');
     expect(themeRowStyle.justifyContent).toBe('flex-end');
+    expect(screen.getByText('अँध्यारो मोड')).toBeTruthy();
+
+    const brandImg = screen.getByTestId('drawer-brand').findAllByType(Image)[0];
+    const brandStyle = StyleSheet.flatten(brandImg.props.style);
+    expect(brandStyle.width).toBeGreaterThan(0);
+    expect(brandStyle.height).toBeGreaterThan(0);
+
+    const themeImgs = screen.getByTestId('drawer-theme-toggle').findAllByType(Image);
+    expect(themeImgs.length).toBe(1);
+    expect(StyleSheet.flatten(themeImgs[0].props.style).width).toBeGreaterThan(0);
 
     const savedOrder = hostTypeOrder(screen.getByLabelText('सुरक्षित लेखहरू'));
     expect(savedOrder.indexOf('Text')).toBeGreaterThanOrEqual(0);
     expect(savedOrder.indexOf('Image')).toBeGreaterThan(savedOrder.indexOf('Text'));
+    const savedImg = screen
+      .getByLabelText('सुरक्षित लेखहरू')
+      .findAllByType(Image)[0];
+    expect(StyleSheet.flatten(savedImg.props.style).width).toBeGreaterThan(20);
 
     expect(screen.getByText('सम्पर्क गर्नुहोस्')).toBeTruthy();
     expect(screen.getByText('Contact us')).toBeTruthy();
