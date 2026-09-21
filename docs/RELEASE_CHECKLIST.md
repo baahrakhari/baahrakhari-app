@@ -1,7 +1,22 @@
+# Release checklist — 1.5.0 (home ads, tablet, drawer)
+
+Living task list. **1.5.0** sits on top of the 1.4.0 Prateek home/drawer cut.
+
+| | |
+|---|---|
+| **Source** | `requirements_defects/new_requirements_09_2026.md` + 1.4.0 carry-forward |
+| **Platforms** | iOS and Android (shared `App.tsx` unless noted) |
+| **Version** | `1.5.0` (iOS build 5; Android `versionCode` 132, local `gradle.properties` only) |
+| **Status** | In progress 2026-09-20 |
+| **Last updated** | 2026-09-20 |
+| **Ads this cut** | Home-only first-party static banners from `getAdvertisementData`. No AdMob, no road-block, no in-article ads. |
+
+---
+
 # Release checklist — Prateek feedback (1.4.0)
 
 Living task list for the iOS + Android **1.4.0** cut, sourced from
-`requirements_prateek.txt`. Update checkboxes and notes as work lands.
+`requirements_prateek.txt`. Kept below as history; current store cut is **1.5.0**.
 
 | | |
 |---|---|
@@ -181,28 +196,35 @@ Pixel_10 smoke, and Jest.
 - [x] ~~Let's have provisions for Road Block and Content Block ads. (Road
   block ads appear before the home page, the content block, as the name
   suggests, blocks contents with ads. Same is true with other ads.)~~
-  (skipped for this release — low priority)
+  (road-block / in-article content-block still **out of scope**)
+- [x] **1.5.0:** Home-only static house banners from
+  `GET https://baahrakhari.com/api/getAdvertisementData` (`home.*` slots).
+  No scripts, no AdMob, no article/sidebar/sticky/header ads.
+  - [x] iOS (shared JS)
+  - [x] Android (shared JS)
+- [x] Declare **Ads** in Play/App Store Data safety as first-party house
+      banners (no advertising ID / no ad SDK)
 
 | | |
 |---|---|
-| **Priority** | Low (source) |
-| **Status** | **Skipped this release** |
-| **Notes** | No ad SDK, road-block interstitial, or in-article content
-  block. Revisit in a later cut. Existing `adSpacer` in the article
-  reader is layout chrome, not ads. |
+| **Priority** | Product (1.5.0) |
+| **Status** | Home static banners implemented; road-block still skipped |
+| **Notes** | Slots: below-breaking-two/three, below-artha, below-khel,
+  below-nation. `adSpacer` in the article reader remains layout chrome. |
 
 ### 10. Share button on headlines (currently missing vs ताजा)
 
 - [x] Share available when reading a headline / former-breaking article
   - [x] iOS (shared JS)
   - [x] Android (shared JS)
-- [x] Share icon on each home headline row (and headlines-page rows)
+- [x] **1.5.0:** Share icons removed from home Top News rows and the
+      HeadlinesList page. Long-press a headline to save instead.
 
 | | |
 |---|---|
 | **Priority** | High |
-| **Status** | Done |
-| **Notes** | Same `Share.share` path as ताजा (`onShareArticle`). |
+| **Status** | Reader share kept; home-row share removed in 1.5.0 |
+| **Notes** | `Share.share` stays on the article reader. |
 
 ### 11. Burger Contact Us: Nepali first, then English (Play-readable)
 

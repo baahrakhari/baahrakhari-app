@@ -6,6 +6,13 @@
          src/state/useArticleAlerts.ts). -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <supports-screens
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:xlargeScreens="true"
+        android:anyDensity="true" />
+
     <!-- Android 11+ package visibility: without this, Linking.canOpenURL
          always reports false for the YouTube app and embedded videos would
          fall back to the browser even when YouTube is installed.

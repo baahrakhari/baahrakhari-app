@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import {HOME_PREVIEW_CATEGORIES} from '../config/site';
 import {fetchBreakingHeadlines, fetchCategoryList} from '../scrape/tajaNewsApi';
 import type {Article, CategorySlug} from '../types/article';
 
@@ -8,18 +9,6 @@ export type HomeCategorySection = {
   items: Article[];
 };
 
-/**
- * Homepage extras: banner “शीर्ष समाचार” (`getBannerDatas`) plus the handful
- * of magazine-style sections baahrakhari.com stacks below ताजा समाचार
- * (राजनीति, अर्थ व्यवसाय, खेल, विचार …). Kept to a small curated set so
- * the home screen stays light on data.
- */
-const PREVIEW_CATEGORIES: Array<{slug: CategorySlug; label: string}> = [
-  {slug: 'politics', label: 'राजनीति'},
-  {slug: 'economy', label: 'अर्थ व्यवसाय'},
-  {slug: 'sport', label: 'खेल'},
-  {slug: 'opinion', label: 'विचार'},
-];
 const PREVIEW_ITEMS_PER_CATEGORY = 4;
 /** Fetch enough banner items for the full in-app headlines page. */
 const HEADLINES_FETCH_LIMIT = 40;
@@ -40,7 +29,7 @@ export function useHomeSections() {
       try {
         const [headlines, ...categoryResults] = await Promise.all([
           fetchBreakingHeadlines(HEADLINES_FETCH_LIMIT).catch(() => []),
-          ...PREVIEW_CATEGORIES.map(cat =>
+          ...HOME_PREVIEW_CATEGORIES.map(cat =>
             fetchCategoryList(cat.slug).catch(() => ({
               listing: [],
               articlesById: {} as Record<string, Article>,
@@ -49,7 +38,7 @@ export function useHomeSections() {
         ]);
         setBreaking(headlines);
         setSections(
-          PREVIEW_CATEGORIES.map((cat, i) => {
+          HOME_PREVIEW_CATEGORIES.map((cat, i) => {
             const result = categoryResults[i];
             const items = result.listing
               .slice(0, PREVIEW_ITEMS_PER_CATEGORY)

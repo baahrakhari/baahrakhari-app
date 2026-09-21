@@ -1,4 +1,4 @@
-import {Platform} from 'react-native';
+import {Dimensions, Platform} from 'react-native';
 
 /**
  * Device idiom detection.
@@ -13,6 +13,21 @@ export const isIPad: boolean =
   Platform.OS === 'ios' && (Platform as unknown as {isPad?: boolean}).isPad === true;
 
 export const isIPhone: boolean = Platform.OS === 'ios' && !isIPad;
+
+/**
+ * Android “smallest width” ≥ 600dp is the usual tablet breakpoint
+ * (sw600dp). Combined with iPad so layout/type scale together.
+ */
+const smallestWindowDp = (): number => {
+  const {width, height} = Dimensions.get('window');
+  return Math.min(width, height);
+};
+
+export const isAndroidTablet: boolean =
+  Platform.OS === 'android' && smallestWindowDp() >= 600;
+
+/** iPad or Android tablet — shared magazine layout / type path. */
+export const isTablet: boolean = isIPad || isAndroidTablet;
 
 export type DeviceIdiom = 'ipad' | 'iphone' | 'android' | 'other';
 
@@ -40,16 +55,15 @@ export const IPAD_FONT_FACTOR = 1.22;
 
 /**
  * Effective composite scale factor for the current device idiom:
- *   • Android / other: 1
+ *   • Android phone:    1
  *   • iPhone:           IOS_FONT_FACTOR
- *   • iPad:             IOS_FONT_FACTOR * IPAD_FONT_FACTOR
+ *   • iPad / Android tablet: IOS_FONT_FACTOR * IPAD_FONT_FACTOR
  */
-export const FONT_FACTOR: number =
-  Platform.OS === 'ios'
-    ? isIPad
-      ? IOS_FONT_FACTOR * IPAD_FONT_FACTOR
-      : IOS_FONT_FACTOR
-    : 1;
+export const FONT_FACTOR: number = isTablet
+  ? IOS_FONT_FACTOR * IPAD_FONT_FACTOR
+  : Platform.OS === 'ios'
+  ? IOS_FONT_FACTOR
+  : 1;
 
 /**
  * Scale an iPhone-tuned numeric size for the current device idiom.
@@ -66,6 +80,6 @@ export function scaleFont(base: number, factor: number = FONT_FACTOR): number {
  */
 export const READING_DEFAULT_BODY: number = scaleFont(19);
 
-/** Pinch-to-zoom / +/- bounds. iPad gets more headroom on the upper end. */
+/** Pinch-to-zoom / +/- bounds. Tablets get more headroom on the upper end. */
 export const ARTICLE_FONT_MIN: number = 14;
-export const ARTICLE_FONT_MAX: number = isIPad ? 48 : 38;
+export const ARTICLE_FONT_MAX: number = isTablet ? 48 : 38;

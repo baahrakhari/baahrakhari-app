@@ -15,7 +15,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import React from 'react';
-import {Image, Platform, StyleSheet} from 'react-native';
+import {Image, Platform, StyleSheet, Text} from 'react-native';
 import App from '../App';
 import {APP_PUBLISHER} from '../src/config/site';
 import type {Article} from '../src/types/article';
@@ -35,6 +35,20 @@ let mockSaved = {
   unsave: jest.fn(async () => {}),
   maxSaved: 20,
 };
+let mockInfo = {
+  about: {heading: 'हाम्रो बारेमा', paragraphs: ['बाह्रखरी परिचय']},
+  team: {
+    heading: 'हाम्रो टिम',
+    categories: [] as Array<{
+      title: string;
+      members: Array<{name: string; role: string; imageUrl?: string}>;
+    }>,
+  },
+  loading: false,
+  online: true,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
 
 jest.mock('../src/state/useArticleFeed', () => ({
   useArticleFeed: jest.fn(() => mockFeed),
@@ -42,18 +56,23 @@ jest.mock('../src/state/useArticleFeed', () => ({
 jest.mock('../src/state/useHomeSections', () => ({
   useHomeSections: jest.fn(() => mockSections),
 }));
+jest.mock('../src/state/useHomeAds', () => ({
+  useHomeAds: jest.fn(() => ({
+    ads: {
+      'below-breaking-two': null,
+      'below-breaking-three': null,
+      'below-artha': null,
+      'below-khel': null,
+      'below-nation': null,
+    },
+    loading: false,
+  })),
+}));
 jest.mock('../src/state/useReadLater', () => ({
   useReadLater: jest.fn(() => mockSaved),
 }));
 jest.mock('../src/state/useInfoPages', () => ({
-  useInfoPages: jest.fn(() => ({
-    about: {heading: 'हाम्रो बारेमा', paragraphs: ['बाह्रखरी परिचय']},
-    team: {categories: []},
-    loading: false,
-    online: true,
-    error: null,
-    refresh: jest.fn(),
-  })),
+  useInfoPages: jest.fn(() => mockInfo),
 }));
 jest.mock('../src/state/useArticleAlerts', () => ({
   useArticleAlerts: jest.fn(() => ({
@@ -93,6 +112,14 @@ beforeEach(() => {
     toggleSaved: jest.fn(async () => false),
     unsave: jest.fn(async () => {}),
     maxSaved: 20,
+  };
+  mockInfo = {
+    about: {heading: 'हाम्रो बारेमा', paragraphs: ['बाह्रखरी परिचय']},
+    team: {heading: 'हाम्रो टिम', categories: []},
+    loading: false,
+    online: true,
+    error: null,
+    refresh: jest.fn(),
   };
 });
 
@@ -169,6 +196,10 @@ describe('home feed', () => {
 
     await waitFor(() => expect(screen.getByText('ब्रेकिंग पूरा पाठ')).toBeTruthy());
     expect(screen.getByLabelText('Share article')).toBeTruthy();
+    expect(screen.getByLabelText('Save article')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Save article'));
+    await waitFor(() => expect(mockSaved.toggleSaved).toHaveBeenCalled());
+    expect(screen.getByText('ब्रेकिंग पूरा पाठ')).toBeTruthy();
   });
 
   it('hides the headlines block when the banner feed is empty', async () => {
@@ -207,10 +238,7 @@ describe('home feed', () => {
     await waitFor(() => expect(screen.queryByLabelText('शीर्षक 13')).toBeNull());
   });
 
-  it('shares a home headline from its row icon', async () => {
-    const share = jest
-      .spyOn(require('react-native').Share, 'share')
-      .mockResolvedValue({action: 'sharedAction'});
+  it('has no share icon on home headlines and saves on long-press', async () => {
     mockSections = {
       breaking: [article('900', {title: 'ब्रेकिंग शीर्षक'})],
       sections: [],
@@ -218,15 +246,38 @@ describe('home feed', () => {
     };
 
     await renderApp();
-    fireEvent.press(screen.getByLabelText('Share ब्रेकिंग शीर्षक'));
+    expect(screen.queryByLabelText('Share ब्रेकिंग शीर्षक')).toBeNull();
+    fireEvent(screen.getByLabelText('ब्रेकिंग शीर्षक'), 'longPress');
 
-    await waitFor(() => expect(share).toHaveBeenCalled());
-    expect(share.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        message: expect.stringContaining('https://baahrakhari.com/detail/900'),
-      }),
+    await waitFor(() => expect(mockSaved.toggleSaved).toHaveBeenCalled());
+    expect(mockSaved.toggleSaved).toHaveBeenCalledWith(
+      expect.objectContaining({id: '900', title: 'ब्रेकिंग शीर्षक'}),
     );
-    share.mockRestore();
+    await waitFor(() => expect(screen.getByText('सुरक्षित भयो')).toBeTruthy());
+    const headlineTitle = screen
+      .getByLabelText('ब्रेकिंग शीर्षक')
+      .findAllByType(Text)[0];
+    expect(StyleSheet.flatten(headlineTitle.props.style).textAlign).toBe('center');
+    const ribbon = screen.getAllByText('शीर्ष समाचार')[0];
+    expect(StyleSheet.flatten(ribbon.props.style).textAlign).toBe('center');
+  });
+
+  it('confirms an already-saved headline instead of unsaving', async () => {
+    mockSections = {
+      breaking: [article('900', {title: 'ब्रेकिंग शीर्षक'})],
+      sections: [],
+      loading: false,
+    };
+    mockSaved = {
+      ...mockSaved,
+      isSaved: () => true,
+    };
+
+    await renderApp();
+    fireEvent(screen.getByLabelText('ब्रेकिंग शीर्षक'), 'longPress');
+
+    await waitFor(() => expect(screen.getByText('पहिले नै सुरक्षित छ')).toBeTruthy());
+    expect(mockSaved.toggleSaved).not.toHaveBeenCalled();
   });
 
   it('switches category from a home section "सबै हेर्नुहोस्" link', async () => {
@@ -276,7 +327,8 @@ describe('burger menu', () => {
     );
 
     fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
-    await waitFor(() => expect(screen.getByLabelText('बन्द गर्नुहोस्')).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('मेनु बन्द गर्नुहोस्')).toBeTruthy());
+    expect(screen.queryByLabelText('बन्द गर्नुहोस्')).toBeNull();
     expect(screen.queryByLabelText('ताजा समाचार')).toBeNull();
 
     const homeMarks = screen.getAllByLabelText('गृहपृष्ठ');
@@ -307,8 +359,8 @@ describe('burger menu', () => {
     const callsBefore = useArticleFeedMock.mock.calls.length;
 
     fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
-    await waitFor(() => expect(screen.getByLabelText('बन्द गर्नुहोस्')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('बन्द गर्नुहोस्'));
+    await waitFor(() => expect(screen.getByLabelText('मेनु बन्द गर्नुहोस्')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('मेनु बन्द गर्नुहोस्'));
 
     await settleAnimations();
     expect(useArticleFeedMock.mock.calls.slice(callsBefore).flat()).not.toContain(
@@ -316,7 +368,7 @@ describe('burger menu', () => {
     );
   });
 
-  it('places saved under theme, label then bookmark, and Contact on two lines', async () => {
+  it('places saved under the logo and pins theme after categories', async () => {
     await renderApp();
 
     fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
@@ -326,8 +378,8 @@ describe('burger menu', () => {
       .getAllByRole('button')
       .map(node => node.props.accessibilityLabel)
       .filter((label): label is string => typeof label === 'string');
-    expect(labels.indexOf('Dark theme')).toBeGreaterThanOrEqual(0);
-    expect(labels.indexOf('सुरक्षित लेखहरू')).toBeGreaterThan(labels.indexOf('Dark theme'));
+    expect(labels.indexOf('Dark theme')).toBeGreaterThan(labels.indexOf('विदेश'));
+    expect(labels.indexOf('Dark theme')).toBeGreaterThan(labels.indexOf('हाम्रो टिम'));
     expect(labels.indexOf('पछिल्ला')).toBeGreaterThan(labels.indexOf('सुरक्षित लेखहरू'));
     expect(labels.indexOf('सम्पर्क गर्नुहोस् / Contact us')).toBeGreaterThan(
       labels.indexOf('पछिल्ला'),
@@ -359,6 +411,144 @@ describe('burger menu', () => {
 
     expect(screen.getByText('सम्पर्क गर्नुहोस्')).toBeTruthy();
     expect(screen.getByText('Contact us')).toBeTruthy();
+    await settleAnimations();
+  });
+
+  it('opens the Team overlay even when categories are empty', async () => {
+    await renderApp();
+
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('हाम्रो टिम').length).toBeGreaterThan(0),
+    );
+    const teamEntries = screen.getAllByLabelText('हाम्रो टिम');
+    fireEvent.press(teamEntries[teamEntries.length - 1]);
+
+    await waitFor(() => expect(screen.getByLabelText('ताजा गर्नुहोस्')).toBeTruthy());
+    expect(screen.getAllByText('हाम्रो टिम').length).toBeGreaterThan(0);
+    await settleAnimations();
+  });
+
+  it('shows both names and no chevron when a team section has two members', async () => {
+    mockInfo = {
+      ...mockInfo,
+      team: {
+        heading: 'हाम्रो टिम',
+        categories: [
+          {
+            title: 'सम्पादकीय समूह',
+            members: [
+              {
+                name: 'प्रतीक प्रधान',
+                role: 'प्रधान सम्पादक',
+                imageUrl: 'https://baahrakhari.com/uploads/members/a.jpg',
+              },
+              {name: 'बलराम पाण्डे', role: 'कार्यकारी सम्पादक'},
+            ],
+          },
+        ],
+      },
+    };
+
+    await renderApp();
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('हाम्रो टिम').length).toBeGreaterThan(0),
+    );
+    const teamEntries = screen.getAllByLabelText('हाम्रो टिम');
+    fireEvent.press(teamEntries[teamEntries.length - 1]);
+
+    await waitFor(() => expect(screen.getByText('प्रतीक प्रधान')).toBeTruthy());
+    expect(screen.getByText('बलराम पाण्डे')).toBeTruthy();
+    expect(screen.queryByLabelText('सम्पादकीय समूह विस्तृत गर्नुहोस्')).toBeNull();
+    expect(screen.getByText('सम्पादकीय समूह')).toBeTruthy();
+    await settleAnimations();
+  });
+
+  it('starts hamro team sections collapsed until a header is opened', async () => {
+    mockInfo = {
+      ...mockInfo,
+      team: {
+        heading: 'हाम्रो टिम',
+        categories: [
+          {
+            title: 'सम्पादकीय समूह',
+            members: [
+              {name: 'प्रतीक प्रधान', role: 'प्रधान सम्पादक'},
+              {name: 'दोश्रो सम्पादक', role: 'सम्पादक'},
+              {name: 'तेस्रो सम्पादक', role: 'सह-सम्पादक'},
+            ],
+          },
+          {
+            title: 'व्यवस्थापन',
+            members: [
+              {name: 'ज्ञानेश्वर आचार्य', role: 'प्रबन्ध निर्देशक'},
+              {name: 'दोस्रो व्यवस्थापक', role: 'प्रबन्धक'},
+              {name: 'तेस्रो व्यवस्थापक', role: 'सहायक'},
+            ],
+          },
+        ],
+      },
+    };
+
+    await renderApp();
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('हाम्रो टिम').length).toBeGreaterThan(0),
+    );
+    const teamEntries = screen.getAllByLabelText('हाम्रो टिम');
+    fireEvent.press(teamEntries[teamEntries.length - 1]);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('सम्पादकीय समूह विस्तृत गर्नुहोस्')).toBeTruthy(),
+    );
+    expect(screen.getByLabelText('व्यवस्थापन विस्तृत गर्नुहोस्')).toBeTruthy();
+    expect(screen.getByText('प्रतीक प्रधान')).toBeTruthy();
+    expect(screen.getByText('दोश्रो सम्पादक')).toBeTruthy();
+    expect(screen.queryByText('तेस्रो सम्पादक')).toBeNull();
+    expect(screen.getByText('ज्ञानेश्वर आचार्य')).toBeTruthy();
+    expect(screen.getByText('दोस्रो व्यवस्थापक')).toBeTruthy();
+    expect(screen.queryByText('तेस्रो व्यवस्थापक')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('सम्पादकीय समूह विस्तृत गर्नुहोस्'));
+    await waitFor(() => expect(screen.getByText('तेस्रो सम्पादक')).toBeTruthy());
+    expect(screen.queryByText('तेस्रो व्यवस्थापक')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('व्यवस्थापन विस्तृत गर्नुहोस्'));
+    await waitFor(() => expect(screen.getByText('तेस्रो व्यवस्थापक')).toBeTruthy());
+    expect(screen.getByText('तेस्रो सम्पादक')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('सम्पादकीय समूह संक्षिप्त गर्नुहोस्'));
+    await waitFor(() => expect(screen.queryByText('तेस्रो सम्पादक')).toBeNull());
+    expect(screen.getByText('प्रतीक प्रधान')).toBeTruthy();
+    expect(screen.getByText('तेस्रो व्यवस्थापक')).toBeTruthy();
+    await settleAnimations();
+  });
+
+  it('renders About and Team overlays when cached content is malformed', async () => {
+    mockInfo = {
+      ...mockInfo,
+      about: {heading: 'हाम्रो बारेमा'} as unknown as (typeof mockInfo)['about'],
+      team: {heading: 'हाम्रो टिम', categories: null} as unknown as (typeof mockInfo)['team'],
+    };
+
+    await renderApp();
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('हाम्रो बारेमा').length).toBeGreaterThan(1),
+    );
+    fireEvent.press(screen.getAllByLabelText('हाम्रो बारेमा')[1]);
+    await waitFor(() => expect(screen.getByText('सामग्री उपलब्ध छैन ।')).toBeTruthy());
+    fireEvent.press(screen.getByText('✕'));
+
+    fireEvent.press(screen.getByLabelText('मेनु खोल्नुहोस्'));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('हाम्रो टिम').length).toBeGreaterThan(0),
+    );
+    const teamEntries = screen.getAllByLabelText('हाम्रो टिम');
+    fireEvent.press(teamEntries[teamEntries.length - 1]);
+    await waitFor(() => expect(screen.getByText('सामग्री उपलब्ध छैन ।')).toBeTruthy());
+    expect(screen.getAllByText('हाम्रो टिम').length).toBeGreaterThan(0);
     await settleAnimations();
   });
 });

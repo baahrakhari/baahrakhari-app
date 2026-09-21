@@ -26,7 +26,7 @@ beforeEach(() => {
   categoryList.mockResolvedValue({listing: [], articlesById: {}});
 });
 
-it('exposes breaking headlines and the four preview categories', async () => {
+it('exposes breaking headlines and every burger-feed preview except latest-news', async () => {
   breaking.mockResolvedValue([article('900'), article('901')]);
   categoryList.mockImplementation(async slug => ({
     listing: listing(`${slug}-1`, `${slug}-2`),
@@ -43,8 +43,13 @@ it('exposes breaking headlines and the four preview categories', async () => {
     'economy',
     'sport',
     'opinion',
+    'nation',
+    'literature',
+    'editorial',
+    'international',
   ]);
   expect(result.current.sections[0].label).toBe('राजनीति');
+  expect(result.current.sections[1].label).toBe('अर्थ व्यवसाय');
   expect(result.current.sections[0].items.map(item => item.id)).toEqual([
     'politics-1',
     'politics-2',

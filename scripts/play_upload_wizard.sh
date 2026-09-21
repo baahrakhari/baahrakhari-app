@@ -271,7 +271,7 @@ print_console_steps() {
   echo "  3. App content → News and magazine apps — contact URL https://baahrakhari.com/contact"
   echo "     Re-confirm if Contact Us placement changed. Privacy policy URL must be live HTTPS"
   echo "     (use https://baahrakhari.com/page/privacy-policy — /privacy 404s)."
-  echo "  4. Data safety: do NOT declare ads (item 9 skipped). No AD_ID permission."
+  echo "  4. Data safety: declare Ads = yes (first-party Home banners only). No AD_ID / no ad SDK."
   if [[ "$track" == "production" ]]; then
     echo "  5. Track: Production — prefer Promote from Internal testing so you reuse versionCode ${code}."
     echo "     Do not upload a second AAB with the same versionCode."

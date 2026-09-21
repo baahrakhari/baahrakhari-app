@@ -45,11 +45,15 @@ without sending any personal information off your device.
 | Notification permission state | Yes | Your device only | Lets the optional once-per-hour new-story reminder work. |
 
 In Apple's "App Privacy" nutrition-label questionnaire, the correct answers
-for this build are:
+for this build (1.5.0) are:
 
 - **Data Linked to You**: *None*
 - **Data Not Linked to You**: *Crash Data* — *App Functionality* — *No, not used for tracking*
 - **Data Used to Track You**: *None*
+- **Advertising data / tracking / IDFA**: *None*. The App does **not**
+  collect data for advertising. Home may display a few **first-party
+  static house banners** (images from baahrakhari.com). There is **no
+  AdMob**, no third-party ad SDK, and no Advertising Identifier.
 
 ---
 
@@ -72,7 +76,10 @@ governs how baahrakhari.com handles the IP address it sees.
 
 ## Third-party SDKs and trackers
 
-The App ships with **no third-party analytics or advertising SDKs**. The runtime dependency list (as of v1.4.0) is:
+The App ships with **no third-party analytics or advertising SDKs** (no
+AdMob). Home-only house banners are static images fetched from
+baahrakhari.com, not an ad network. The runtime dependency list (as of
+v1.5.0) is:
 
 - `@react-native-async-storage/async-storage` — local key-value storage on your device
 - `@react-native-community/push-notification-ios` — local notifications only

@@ -28,13 +28,64 @@ type InfoState = {
   refresh: () => Promise<void>;
 };
 
-async function readCache<T>(key: string): Promise<T | undefined> {
+function asAbout(value: unknown): AboutContent | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const v = value as Partial<AboutContent>;
+  if (typeof v.heading !== 'string' || !Array.isArray(v.paragraphs)) {
+    return undefined;
+  }
+  return {
+    url: typeof v.url === 'string' ? v.url : ABOUT_URL,
+    heading: v.heading,
+    paragraphs: v.paragraphs.filter((p): p is string => typeof p === 'string'),
+    fetchedAt: typeof v.fetchedAt === 'number' ? v.fetchedAt : 0,
+  };
+}
+
+function asTeam(value: unknown): TeamContent | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const v = value as Partial<TeamContent>;
+  if (typeof v.heading !== 'string' || !Array.isArray(v.categories)) {
+    return undefined;
+  }
+  const categories = v.categories
+    .map(cat => {
+      if (!cat || typeof cat !== 'object' || typeof cat.title !== 'string') {
+        return undefined;
+      }
+      const members = Array.isArray(cat.members)
+        ? cat.members.filter(
+            member =>
+              member &&
+              typeof member === 'object' &&
+              typeof member.name === 'string',
+          )
+        : [];
+      return {title: cat.title, members};
+    })
+    .filter((cat): cat is NonNullable<typeof cat> => cat != null);
+  return {
+    url: typeof v.url === 'string' ? v.url : TEAM_URL,
+    heading: v.heading,
+    categories,
+    fetchedAt: typeof v.fetchedAt === 'number' ? v.fetchedAt : 0,
+  };
+}
+
+async function readCache<T>(
+  key: string,
+  coerce: (value: unknown) => T | undefined,
+): Promise<T | undefined> {
   try {
     const raw = await AsyncStorage.getItem(key);
     if (!raw) {
       return undefined;
     }
-    return JSON.parse(raw) as T;
+    return coerce(JSON.parse(raw));
   } catch {
     return undefined;
   }
@@ -81,10 +132,10 @@ export function useInfoPages(): InfoState {
 
       const aboutPromise = skipAbout
         ? Promise.resolve(undefined)
-        : fetchInfoHtml(ABOUT_URL).then(parseAboutPage);
+        : fetchInfoHtml(ABOUT_URL).then(html => asAbout(parseAboutPage(html)));
       const teamPromise = skipTeam
         ? Promise.resolve(undefined)
-        : fetchInfoHtml(TEAM_URL).then(parseTeamPage);
+        : fetchInfoHtml(TEAM_URL).then(html => asTeam(parseTeamPage(html)));
 
       const [aboutRes, teamRes] = await Promise.allSettled([
         aboutPromise,
@@ -122,8 +173,8 @@ export function useInfoPages(): InfoState {
     let cancelled = false;
     (async () => {
       const [cachedAbout, cachedTeam] = await Promise.all([
-        readCache<AboutContent>(KEY_ABOUT),
-        readCache<TeamContent>(KEY_TEAM),
+        readCache(KEY_ABOUT, asAbout),
+        readCache(KEY_TEAM, asTeam),
       ]);
       if (cancelled) {
         return;

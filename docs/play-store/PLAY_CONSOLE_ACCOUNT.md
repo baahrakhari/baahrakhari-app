@@ -43,11 +43,14 @@ Appeal case if asked: `3-4690000040664`.
 
 ## 3. Data safety (App content)
 
-Do **not** add ads. Item 9 (road-block / content-block) was skipped.
+Declare **Ads = yes** for first-party Home banners. Do **not** claim an
+advertising ID or a third-party ad SDK. Road-block / in-article ads are
+not in this build.
 
 | Topic | Declare |
 |---|---|
-| Ads / advertising ID | **No** — no ad SDK, no `AD_ID` |
+| Ads | **Yes** — first-party static house banners on Home only |
+| Advertising ID | **No** — no ad SDK, no `AD_ID` |
 | Notifications | Optional local story alerts (`POST_NOTIFICATIONS`) |
 | Firebase / FCM | Keep whatever the **previous** form said (transitive via `react-native-push-notification`). Do not newly claim “no SDKs” if Firebase was already listed. |
 

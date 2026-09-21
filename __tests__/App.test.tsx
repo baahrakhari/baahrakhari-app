@@ -37,6 +37,19 @@ jest.mock('../src/state/useHomeSections', () => ({
   }),
 }));
 
+jest.mock('../src/state/useHomeAds', () => ({
+  useHomeAds: () => ({
+    ads: {
+      'below-breaking-two': null,
+      'below-breaking-three': null,
+      'below-artha': null,
+      'below-khel': null,
+      'below-nation': null,
+    },
+    loading: false,
+  }),
+}));
+
 jest.mock('../src/state/useReadLater', () => ({
   useReadLater: () => ({
     saved: [],

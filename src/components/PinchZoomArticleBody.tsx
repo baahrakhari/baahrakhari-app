@@ -43,7 +43,9 @@ export function PinchZoomArticleBody({children, fontSizeRef, setFontSize}: Props
         Math.max(ARTICLE_FONT_MIN, pinchBaseRef.current * e.nativeEvent.scale),
       ),
     );
-    setFontSize(next);
+    if (next !== fontSizeRef.current) {
+      setFontSize(next);
+    }
   };
 
   return (

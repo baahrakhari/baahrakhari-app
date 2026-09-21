@@ -2,12 +2,14 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
   type ImageStyle,
   Linking,
   Modal,
+  PanResponder,
   Pressable,
   Platform,
   ScrollView,
@@ -15,6 +17,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  Vibration,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -27,9 +30,11 @@ import {
 } from 'react-native-safe-area-context';
 import {CONTACT_INFO_EN, DRAWER_FEED_CATEGORIES, FOOTER_INFO, INFO_LINKS, NEWS_CATEGORIES, SITE_CONTACT_URL, APP_PUBLISHER, nepaliDigitsToAscii, type ContactBlocksContent} from './src/config/site';
 import {parseBaahrakhariArticleUrl} from './src/linking/baahrakhariUrls';
+import type {HomeAdsMap} from './src/scrape/advertisements';
 import {fetchNewsDetail} from './src/scrape/tajaNewsApi';
 import {useArticleAlerts} from './src/state/useArticleAlerts';
 import {useArticleFeed} from './src/state/useArticleFeed';
+import {useHomeAds} from './src/state/useHomeAds';
 import {useHomeSections, type HomeCategorySection} from './src/state/useHomeSections';
 import {useInfoPages} from './src/state/useInfoPages';
 import {useReadLater} from './src/state/useReadLater';
@@ -41,10 +46,12 @@ import {
   ARTICLE_FONT_MAX,
   ARTICLE_FONT_MIN,
 } from './src/components/PinchZoomArticleBody';
+import {HomeAdSlot} from './src/components/HomeAdSlot';
 import {Colors} from './src/theme/colors';
 import {
   READING_DEFAULT_BODY,
   isIPad,
+  isTablet,
   scaleFont,
 } from './src/theme/device';
 import type {Article, CategoryKey, SavedArticle} from './src/types/article';
@@ -81,6 +88,17 @@ const ARTICLE_SAVE_ICON_BOX = 36;
 const ARTICLE_SHARE_ICON_SIZE = 25;
 /** Pixels: treat body as scrollable only if content is taller than the viewport by at least this much. */
 const SCROLL_CHROME_EPS = 3;
+const SAVE_TOAST_MS = 2200;
+const SAVE_TOAST_SAVED = 'सुरक्षित भयो';
+const SAVE_TOAST_ALREADY = 'पहिले नै सुरक्षित छ';
+
+function httpUri(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : undefined;
+}
 
 /**
  * Pure hero-height math shared by the reactive `resolveHeroHeight` (used in
@@ -132,6 +150,8 @@ function AppBody(): React.JSX.Element {
   const [isHeroCollapsed, setIsHeroCollapsed] = useState(false);
   const [swipeHintDir, setSwipeHintDir] = useState<'next' | 'prev' | null>(null);
   const [readModalArticle, setReadModalArticle] = useState<SavedArticle | null>(null);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+  const saveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Side burger menu — replaces the old collapsing category bar. */
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -161,7 +181,6 @@ function AppBody(): React.JSX.Element {
   const heroCollapsedReading = Math.max(52, Math.min(72, Math.floor(height * 0.072)));
   const heroHeightAnim = useRef(new Animated.Value(HERO_DEFAULT_HEIGHT)).current;
   const heroCollapsedRef = useRef(false);
-  const articleBodyViewportHRef = useRef<Record<string, number>>({});
   /** Which feed article owns scroll-driven chrome (ignore off-screen rows). */
   const focusedArticleIdRef = useRef<string | null>(null);
   const {
@@ -175,6 +194,7 @@ function AppBody(): React.JSX.Element {
     useArticleFeed(category);
   const {saved, isSaved, toggleSaved, unsave, loadingSaved, maxSaved} = useReadLater();
   const homeSections = useHomeSections();
+  const homeAds = useHomeAds();
   const heroBounds = useMemo(
     () => ({
       min: HERO_MIN_HEIGHT,
@@ -252,6 +272,9 @@ function AppBody(): React.JSX.Element {
    */
   const infoPages = useInfoPages();
   const [infoOverlay, setInfoOverlay] = useState<InfoPageKey | null>(null);
+  const pendingInfoOverlayRef = useRef<InfoPageKey | null>(null);
+  const infoOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastViewableIdRef = useRef<string | null>(null);
   const pendingDeepLinkIdRef = useRef<string | null>(null);
 
   const openArticleFromUrl = useCallback(
@@ -325,11 +348,23 @@ function AppBody(): React.JSX.Element {
       if (i == null || i < 0) {
         return;
       }
-      setFocusedIndex(i);
       const list = itemsRef.current;
       const cur = list[i];
       const next = list[i + 1];
+      /**
+       * Same-article retriggers (hero height animation shifting the
+       * viewability threshold) must not reset chrome or start another
+       * timing loop — that froze the reader after a couple of stories.
+       */
+      if (cur && lastViewableIdRef.current === cur.id) {
+        if (next) {
+          hydrateArticleRef.current(next).catch(() => {});
+        }
+        return;
+      }
+      setFocusedIndex(i);
       if (cur) {
+        lastViewableIdRef.current = cur.id;
         focusedArticleIdRef.current = cur.id;
         hydrateArticleRef.current(cur).catch(() => {});
       }
@@ -356,6 +391,17 @@ function AppBody(): React.JSX.Element {
     },
   ).current;
 
+  const showSaveToast = useCallback((message: string) => {
+    setSaveToast(message);
+    if (saveToastTimerRef.current != null) {
+      clearTimeout(saveToastTimerRef.current);
+    }
+    saveToastTimerRef.current = setTimeout(() => {
+      setSaveToast(null);
+      saveToastTimerRef.current = null;
+    }, SAVE_TOAST_MS);
+  }, []);
+
   const onToggleSaved = async (article: Article) => {
     if (article.bodyText.trim().length > 0) {
       await toggleSaved(article);
@@ -378,7 +424,24 @@ function AppBody(): React.JSX.Element {
     }
   };
 
-  const goHomeFeed = () => {
+  const onLongPressSave = (article: Article) => {
+    Vibration.vibrate(20);
+    if (isSaved(article.id)) {
+      showSaveToast(SAVE_TOAST_ALREADY);
+      return;
+    }
+    onToggleSaved(article)
+      .then(() => showSaveToast(SAVE_TOAST_SAVED))
+      .catch(() => {});
+  };
+
+  const stopArticleAnims = useCallback(() => {
+    heroHeightAnim.stopAnimation();
+    transitionAnim.stopAnimation();
+    swipeHintOpacity.stopAnimation();
+  }, [heroHeightAnim, swipeHintOpacity, transitionAnim]);
+
+  const goHomeFeed = useCallback(() => {
     /** Already on the website-style home list — pull fresh titles. */
     const shouldRefreshNow =
       mode === 'feed' &&
@@ -391,14 +454,24 @@ function AppBody(): React.JSX.Element {
     setHomeStartIndex(0);
     setHeadlinesListOpen(false);
     focusedArticleIdRef.current = null;
+    lastViewableIdRef.current = null;
     horizontalOffsetRef.current = 0;
     heroCollapsedRef.current = false;
     setIsHeroCollapsed(false);
+    stopArticleAnims();
     focusHero(null);
     if (shouldRefreshNow) {
       reload();
     }
-  };
+  }, [
+    category,
+    focusHero,
+    headlinesListOpen,
+    homeDrilled,
+    mode,
+    reload,
+    stopArticleAnims,
+  ]);
 
   /** Drill from the home title list into the swipe reader at `index`. */
   const openArticleAtIndex = useCallback(
@@ -437,6 +510,7 @@ function AppBody(): React.JSX.Element {
       setHomeStartIndex(0);
       setHeadlinesListOpen(false);
       focusedArticleIdRef.current = null;
+      lastViewableIdRef.current = null;
       horizontalOffsetRef.current = 0;
       heroCollapsedRef.current = false;
       setIsHeroCollapsed(false);
@@ -486,7 +560,7 @@ function AppBody(): React.JSX.Element {
           ...detailed,
           bodyText: detailed.bodyText || detailed.title,
           fetchedAt: Date.now(),
-          savedAt: Date.now(),
+          savedAt: 0,
         });
       } catch {
         /* link target unavailable offline */
@@ -494,11 +568,54 @@ function AppBody(): React.JSX.Element {
     })();
   }, [items, loading, openArticleAtIndex]);
 
-  /** Open the in-app About/Team overlay (rendered from cached content). */
-  const openInfoOverlay = useCallback((key: InfoPageKey) => {
-    setInfoOverlay(key);
+  /** Open About/Team after the drawer Modal has dismissed — iOS will not
+   *  present a second UIViewController while the burger sheet is still up. */
+  const presentPendingInfoOverlay = useCallback(() => {
+    const key = pendingInfoOverlayRef.current;
+    if (!key) {
+      return;
+    }
+    pendingInfoOverlayRef.current = null;
+    if (infoOverlayTimerRef.current != null) {
+      clearTimeout(infoOverlayTimerRef.current);
+      infoOverlayTimerRef.current = null;
+    }
+    setDrawerOpen(false);
+    setDrawerVisible(false);
+    setTimeout(() => {
+      setInfoOverlay(key);
+    }, 32);
   }, []);
+
+  const openInfoOverlay = useCallback(
+    (key: InfoPageKey) => {
+      if (drawerVisible || drawerOpen) {
+        pendingInfoOverlayRef.current = key;
+        setDrawerOpen(false);
+        if (infoOverlayTimerRef.current != null) {
+          clearTimeout(infoOverlayTimerRef.current);
+        }
+        infoOverlayTimerRef.current = setTimeout(() => {
+          presentPendingInfoOverlay();
+        }, 280);
+        return;
+      }
+      setInfoOverlay(key);
+    },
+    [drawerOpen, drawerVisible, presentPendingInfoOverlay],
+  );
   const closeInfoOverlay = useCallback(() => setInfoOverlay(null), []);
+
+  useEffect(() => {
+    return () => {
+      if (infoOverlayTimerRef.current != null) {
+        clearTimeout(infoOverlayTimerRef.current);
+      }
+      if (saveToastTimerRef.current != null) {
+        clearTimeout(saveToastTimerRef.current);
+      }
+    };
+  }, []);
 
   /** After drilling in, ensure the pager lands on `homeStartIndex`. */
   useEffect(() => {
@@ -533,26 +650,10 @@ function AppBody(): React.JSX.Element {
     [selectCategory],
   );
 
-  /** Opens a homepage "breaking" headline (full body already in hand) in the read overlay. */
+  /** Opens a homepage "breaking" headline in the read overlay without marking it saved. */
   const setReadModalArticleFromArticle = useCallback((article: Article) => {
-    setReadModalArticle({...article, savedAt: Date.now()});
+    setReadModalArticle({...article, savedAt: 0});
   }, []);
-
-  /** Un-collapse the hero once we know the article's body doesn't actually scroll. */
-  const expandReadingChromeIfShortArticle = useCallback(() => {
-    if (!heroCollapsedRef.current) {
-      return;
-    }
-    heroCollapsedRef.current = false;
-    setIsHeroCollapsed(false);
-    const target = resolveHeroHeight(focusedArticleIdRef.current);
-    setHeroExpanded(target);
-    Animated.timing(heroHeightAnim, {
-      toValue: target,
-      duration: 170,
-      useNativeDriver: false,
-    }).start();
-  }, [heroHeightAnim, resolveHeroHeight]);
 
   /** Opens the side burger menu. */
   const openDrawer = useCallback(() => {
@@ -573,9 +674,92 @@ function AppBody(): React.JSX.Element {
     }).start(({finished}) => {
       if (finished && !drawerOpen) {
         setDrawerVisible(false);
+        if (pendingInfoOverlayRef.current) {
+          presentPendingInfoOverlay();
+        }
       }
     });
-  }, [drawerAnim, drawerOpen]);
+  }, [drawerAnim, drawerOpen, presentPendingInfoOverlay]);
+
+  const articlePagerVisible =
+    mode === 'feed' &&
+    category !== 'contact-us' &&
+    !loading &&
+    !error &&
+    !(category === 'home' && headlinesListOpen) &&
+    !(category === 'home' && !homeDrilled);
+
+  const drawerEdgePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        gesture.dx > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+      onPanResponderRelease: (_evt, gesture) => {
+        if (gesture.dx > 36 || gesture.vx > 0.35) {
+          openDrawer();
+        }
+      },
+    }),
+  ).current;
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (drawerOpen) {
+        closeDrawer();
+        return true;
+      }
+      if (readModalArticle) {
+        setReadModalArticle(null);
+        return true;
+      }
+      if (infoOverlay) {
+        closeInfoOverlay();
+        return true;
+      }
+      if (headlinesListOpen) {
+        setHeadlinesListOpen(false);
+        return true;
+      }
+      if (homeDrilled) {
+        setHomeDrilled(false);
+        setHomeStartIndex(0);
+        focusedArticleIdRef.current = null;
+        lastViewableIdRef.current = null;
+        horizontalOffsetRef.current = 0;
+        heroCollapsedRef.current = false;
+        setIsHeroCollapsed(false);
+        stopArticleAnims();
+        focusHero(null);
+        return true;
+      }
+      if (mode === 'read') {
+        setMode('feed');
+        return true;
+      }
+      if (category !== 'home') {
+        goHomeFeed();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [
+    category,
+    closeDrawer,
+    closeInfoOverlay,
+    drawerOpen,
+    focusHero,
+    goHomeFeed,
+    headlinesListOpen,
+    homeDrilled,
+    infoOverlay,
+    mode,
+    readModalArticle,
+    stopArticleAnims,
+  ]);
 
   const goToNextArticle = (fromIndex: number) => {
     const target = fromIndex + 1;
@@ -633,9 +817,12 @@ function AppBody(): React.JSX.Element {
       layoutH > SCROLL_CHROME_EPS && contentH > layoutH + SCROLL_CHROME_EPS;
 
     if (!canScrollVertically) {
-      if (heroCollapsedRef.current) {
-        expandReadingChromeIfShortArticle();
-      }
+      /**
+       * Expanding from here races the collapse animation: shrinking the
+       * hero grows the viewport, content suddenly "fits", we expand, the
+       * viewport shrinks, content overflows again. Leave short articles
+       * expanded and never auto-expand from a content-size flip.
+       */
       return;
     }
 
@@ -820,17 +1007,13 @@ function AppBody(): React.JSX.Element {
               <HeadlinesList
                 items={homeSections.breaking}
                 palette={palette}
-                isDark={isDark}
                 onOpen={setReadModalArticleFromArticle}
-                onShare={article => {
-                  onShareArticle(article).catch(() => {});
-                }}
+                onToggleSaved={onLongPressSave}
               />
             ) : category === 'home' && !homeDrilled ? (
               <HomeFeedList
                 items={data}
                 palette={palette}
-                isDark={isDark}
                 onSelect={openArticleAtIndex}
                 onOpenLink={openInfoOverlay}
                 onOpenContact={openContactUs}
@@ -838,12 +1021,12 @@ function AppBody(): React.JSX.Element {
                 refreshing={loading}
                 breaking={homeSections.breaking}
                 onOpenBreaking={setReadModalArticleFromArticle}
-                onShareHeadline={article => {
-                  onShareArticle(article).catch(() => {});
-                }}
+                onToggleSavedHeadline={onLongPressSave}
                 onOpenHeadlinesPage={() => setHeadlinesListOpen(true)}
                 sections={homeSections.sections}
                 onOpenSection={selectCategory}
+                ads={homeAds.ads}
+                adsLoading={homeAds.loading}
               />
             ) : (
               <FlatList
@@ -862,6 +1045,10 @@ function AppBody(): React.JSX.Element {
                 keyExtractor={item => item.id}
                 showsHorizontalScrollIndicator={false}
                 getItemLayout={(_, i) => ({length: width, offset: width * i, index: i})}
+                windowSize={3}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                updateCellsBatchingPeriod={50}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={{itemVisiblePercentThreshold: 60}}
                 onScrollToIndexFailed={({index: failed}) => {
@@ -1085,22 +1272,6 @@ function AppBody(): React.JSX.Element {
                         <GHScrollView
                         style={styles.bottomScroll}
                         contentContainerStyle={styles.bodyWrap}
-                        onLayout={ev => {
-                          articleBodyViewportHRef.current[item.id] =
-                            ev.nativeEvent.layout.height;
-                        }}
-                        onContentSizeChange={(_cw, ch) => {
-                          if (focusedArticleIdRef.current !== item.id) {
-                            return;
-                          }
-                          const lh = articleBodyViewportHRef.current[item.id] ?? 0;
-                          if (
-                            lh > SCROLL_CHROME_EPS &&
-                            ch <= lh + SCROLL_CHROME_EPS
-                          ) {
-                            expandReadingChromeIfShortArticle();
-                          }
-                        }}
                         onScroll={e => {
                           if (focusedArticleIdRef.current !== item.id) {
                             return;
@@ -1226,8 +1397,9 @@ function AppBody(): React.JSX.Element {
           />
         )}
 
+        {readModalArticle ? (
         <Modal
-          visible={readModalArticle != null}
+          visible
           animationType="slide"
           presentationStyle="pageSheet"
           onRequestClose={() => setReadModalArticle(null)}>
@@ -1296,16 +1468,27 @@ function AppBody(): React.JSX.Element {
                     </Pressable>
                     <Pressable
                     onPress={() => {
-                      unsave(readModalArticle.id).catch(() => {});
-                      setReadModalArticle(null);
+                      onToggleSaved(readModalArticle).catch(() => {});
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isSaved(readModalArticle.id)
+                        ? 'Remove from saved'
+                        : 'Save article'
+                    }
                     style={[
                       styles.unsaveBtn,
                       {backgroundColor: palette.background},
                     ]}>
                     <Image
                       source={
-                        isDark ? ICON_REMOVE_BOOKMARK_DARK : ICON_REMOVE_BOOKMARK
+                        isSaved(readModalArticle.id)
+                          ? isDark
+                            ? ICON_REMOVE_BOOKMARK_DARK
+                            : ICON_REMOVE_BOOKMARK
+                          : isDark
+                          ? ICON_SAVE_ARTICLE_DARK
+                          : ICON_SAVE_ARTICLE
                       }
                       style={styles.unsaveIconImg}
                       resizeMode="contain"
@@ -1326,9 +1509,9 @@ function AppBody(): React.JSX.Element {
                     {readModalMetaLine}
                   </Text>
                 ) : null}
-                {readModalArticle.imageUrl ? (
+                {httpUri(readModalArticle.imageUrl) ? (
                   <Image
-                    source={{uri: readModalArticle.imageUrl}}
+                    source={{uri: httpUri(readModalArticle.imageUrl)}}
                     style={[styles.readHero, {height: readHeroHeight}]}
                     resizeMode="cover"
                     onLoad={ev => {
@@ -1340,7 +1523,7 @@ function AppBody(): React.JSX.Element {
                         160,
                         Math.min(Math.round(height * 0.55), Math.round(width * (ih / iw))),
                       );
-                      setReadHeroHeight(target);
+                      setReadHeroHeight(prev => (prev === target ? prev : target));
                     }}
                   />
                 ) : null}
@@ -1365,6 +1548,7 @@ function AppBody(): React.JSX.Element {
             </SafeAreaView>
           </SafeAreaProvider>
         </Modal>
+        ) : null}
 
         <InfoOverlayModal
           activeKey={infoOverlay}
@@ -1395,6 +1579,26 @@ function AppBody(): React.JSX.Element {
           onSelectSaved={openSavedList}
           onSelectInfo={openInfoOverlay}
         />
+        {!articlePagerVisible ? (
+          <View
+            testID="drawer-edge-swipe"
+            style={[styles.drawerEdgeSwipe, {top: insets.top + 56}]}
+            {...drawerEdgePan.panHandlers}
+          />
+        ) : null}
+        {saveToast ? (
+          <View
+            pointerEvents="none"
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.saveToastWrap}>
+            <View style={[styles.saveToast, {backgroundColor: palette.accent}]}>
+              <Text style={[styles.saveToastText, {color: palette.onAccent}]}>
+                {saveToast}
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
     </>
   );
@@ -1495,10 +1699,8 @@ function DrawerItem({
 
 /**
  * Simple side burger menu — replaces the old collapsing category chip bar.
- * All primary navigation (categories, saved articles, About/Team) lives
- * here so the header itself never has to expand/collapse. The brand mark
- * is the Home control; theme toggle sits directly under it, then saved
- * articles, then categories, then Contact (two lines).
+ * Brand mark is Home; saved articles next; categories scroll; theme sits
+ * on the floor of the drawer. Overlay tap (not an ✕) closes the menu.
  */
 function SideDrawer({
   visible,
@@ -1591,38 +1793,7 @@ function SideDrawer({
                     style={{width: brandWidth, height: brandHeight}}
                   />
                 </Pressable>
-                <Pressable
-                  onPress={onClose}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="बन्द गर्नुहोस्"
-                  style={[styles.drawerCloseAbs, styles.closeBtn, {borderColor: palette.border}]}>
-                  <Text style={[styles.closeText, {color: palette.text}]}>✕</Text>
-                </Pressable>
               </View>
-              <Pressable
-                testID="drawer-theme-toggle"
-                onPress={onToggleTheme}
-                accessibilityRole="button"
-                accessibilityLabel={isDark ? 'Light theme' : 'Dark theme'}
-                hitSlop={8}
-                style={({pressed}) => [
-                  styles.drawerThemeRow,
-                  {opacity: pressed ? 0.7 : 1},
-                ]}>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.drawerItemText, styles.drawerThemeLabel, {color: palette.text}]}>
-                  {themeLabel}
-                </Text>
-                <Image
-                  source={isDark ? ICON_THEME_SUN : ICON_THEME_MOON}
-                  style={styles.themeIcon}
-                  resizeMode="contain"
-                  tintColor={palette.text}
-                />
-              </Pressable>
-              <DrawerHairline color={hairlineColor} />
               <DrawerItem
                 testID="drawer-saved"
                 label="सुरक्षित लेखहरू"
@@ -1637,7 +1808,7 @@ function SideDrawer({
                 }}
               />
               <DrawerHairline color={hairlineColor} />
-              <ScrollView contentContainerStyle={styles.drawerBody}>
+              <ScrollView style={styles.drawerScroll} contentContainerStyle={styles.drawerBody}>
                 {DRAWER_FEED_CATEGORIES.map((cat, index) => (
                   <React.Fragment key={cat.slug}>
                     {index > 0 ? <DrawerHairline color={hairlineColor} /> : null}
@@ -1688,6 +1859,29 @@ function SideDrawer({
                   }}
                 />
               </ScrollView>
+              <DrawerHairline color={hairlineColor} />
+              <Pressable
+                testID="drawer-theme-toggle"
+                onPress={onToggleTheme}
+                accessibilityRole="button"
+                accessibilityLabel={isDark ? 'Light theme' : 'Dark theme'}
+                hitSlop={8}
+                style={({pressed}) => [
+                  styles.drawerThemeRow,
+                  {opacity: pressed ? 0.7 : 1},
+                ]}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.drawerItemText, styles.drawerThemeLabel, {color: palette.text}]}>
+                  {themeLabel}
+                </Text>
+                <Image
+                  source={isDark ? ICON_THEME_SUN : ICON_THEME_MOON}
+                  style={styles.themeIcon}
+                  resizeMode="contain"
+                  tintColor={palette.text}
+                />
+              </Pressable>
             </View>
           </Animated.View>
         </View>
@@ -1720,18 +1914,44 @@ function InfoOverlayModal({
   onRefresh: () => void;
   onClose: () => void;
   palette: HomePalette;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const visible = activeKey != null;
   const content = activeKey === 'team' ? team : about;
   const fallbackTitle =
     activeKey === 'team' ? 'हाम्रो टिम' : 'हाम्रो बारेमा';
-  const title = content?.heading || fallbackTitle;
-  const showEmpty = !loading && !content;
+  const title =
+    typeof content?.heading === 'string' && content.heading.length > 0
+      ? content.heading
+      : fallbackTitle;
+  const aboutParagraphs = Array.isArray(about?.paragraphs)
+    ? about.paragraphs.filter((p): p is string => typeof p === 'string')
+    : [];
+  const teamCategories = Array.isArray(team?.categories) ? team.categories : [];
+  const hasBody =
+    activeKey === 'team' ? teamCategories.length > 0 : aboutParagraphs.length > 0;
+  const showEmpty = !loading && !hasBody;
+  const emptyMessage = error ?? 'सामग्री उपलब्ध छैन ।';
   const refreshLabel = online
     ? 'ताजा गर्नुहोस्'
     : error
     ? 'पुनः कोसिस गर्नुहोस्'
     : 'ताजा गर्नुहोस्';
+  /**
+   * Expansion state must stay above any conditional return so hook order is
+   * stable. Fast Refresh from the previous `string | null` state can leave
+   * a non-array here — never call `.includes` on it directly.
+   */
+  const TEAM_COLLAPSED_PREVIEW = 2;
+  const [expandedTeamTitles, setExpandedTeamTitles] = useState<string[]>([]);
+  useEffect(() => {
+    setExpandedTeamTitles([]);
+  }, [activeKey]);
+  const expandedIds = Array.isArray(expandedTeamTitles)
+    ? expandedTeamTitles
+    : [];
+  if (!visible) {
+    return null;
+  }
   return (
     <Modal
       visible={visible}
@@ -1778,7 +1998,7 @@ function InfoOverlayModal({
             </Text>
           </View>
         ) : null}
-        {loading && !content ? (
+        {loading && !hasBody ? (
           <View style={styles.center}>
             <ActivityIndicator color={palette.accent} />
             <Text style={[styles.loading, {color: palette.textSecondary}]}>
@@ -1788,13 +2008,65 @@ function InfoOverlayModal({
         ) : showEmpty ? (
           <View style={styles.center}>
             <Text style={[styles.error, {color: palette.accent}]}>
-              {error ?? 'सामग्री उपलब्ध छैन ।'}
+              {emptyMessage}
             </Text>
           </View>
-        ) : activeKey === 'team' && team ? (
+        ) : activeKey === 'team' ? (
           <ScrollView contentContainerStyle={styles.infoModalBody}>
-            {team.categories.map(cat => (
-              <View key={cat.title} style={styles.teamCategoryBlock}>
+            {teamCategories.map((cat, catIndex) => {
+              const catTitle =
+                typeof cat?.title === 'string' && cat.title.length > 0
+                  ? cat.title
+                  : `section-${catIndex}`;
+              const members = (Array.isArray(cat?.members) ? cat.members : []).filter(
+                member => member && typeof member.name === 'string',
+              );
+              const expanded = expandedIds.includes(catTitle);
+              const hasMore = members.length > TEAM_COLLAPSED_PREVIEW;
+              const visibleMembers =
+                expanded || !hasMore
+                  ? members
+                  : members.slice(0, TEAM_COLLAPSED_PREVIEW);
+              const toggleExpanded = () => {
+                setExpandedTeamTitles(prev => {
+                  const current = Array.isArray(prev) ? prev : [];
+                  return expanded
+                    ? current.filter(id => id !== catTitle)
+                    : [...current, catTitle];
+                });
+              };
+              return (
+              <View key={`${catTitle}-${catIndex}`} style={styles.teamCategoryBlock}>
+                {hasMore ? (
+                <Pressable
+                  onPress={toggleExpanded}
+                  accessibilityRole="button"
+                  accessibilityState={{expanded}}
+                  accessibilityLabel={
+                    expanded
+                      ? `${catTitle} संक्षिप्त गर्नुहोस्`
+                      : `${catTitle} विस्तृत गर्नुहोस्`
+                  }
+                  style={[
+                    styles.teamCategoryHeader,
+                    {backgroundColor: palette.accent},
+                  ]}>
+                  <Text
+                    style={[
+                      styles.teamCategoryHeaderText,
+                      {color: palette.onAccent},
+                    ]}>
+                    {catTitle}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.teamCategoryChevron,
+                      {color: palette.onAccent},
+                    ]}>
+                    {expanded ? '▾' : '▸'}
+                  </Text>
+                </Pressable>
+                ) : (
                 <View
                   style={[
                     styles.teamCategoryHeader,
@@ -1805,13 +2077,18 @@ function InfoOverlayModal({
                       styles.teamCategoryHeaderText,
                       {color: palette.onAccent},
                     ]}>
-                    {cat.title}
+                    {catTitle}
                   </Text>
                 </View>
+                )}
                 <View style={styles.teamMemberGrid}>
-                  {cat.members.map(member => (
+                  {visibleMembers.map((member, memberIndex) => {
+                    const photoUri = httpUri(member.imageUrl);
+                    const role =
+                      typeof member.role === 'string' ? member.role : '';
+                    return (
                     <View
-                      key={`${cat.title}-${member.name}`}
+                      key={`${catTitle}-${memberIndex}-${member.name}`}
                       style={[
                         styles.teamMemberCard,
                         {
@@ -1819,9 +2096,9 @@ function InfoOverlayModal({
                           borderColor: palette.border,
                         },
                       ]}>
-                      {member.imageUrl ? (
+                      {photoUri ? (
                         <Image
-                          source={{uri: member.imageUrl}}
+                          source={{uri: photoUri}}
                           style={[
                             styles.teamMemberPhoto,
                             {backgroundColor: palette.backgroundSubtle},
@@ -1841,25 +2118,27 @@ function InfoOverlayModal({
                         numberOfLines={2}>
                         {member.name}
                       </Text>
-                      {member.role ? (
+                      {role ? (
                         <Text
                           style={[
                             styles.teamMemberRole,
                             {color: palette.textSecondary},
                           ]}
                           numberOfLines={2}>
-                          {member.role}
+                          {role}
                         </Text>
                       ) : null}
                     </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </View>
-            ))}
+              );
+            })}
           </ScrollView>
-        ) : about ? (
+        ) : (
           <ScrollView contentContainerStyle={styles.infoModalBody}>
-            {about.paragraphs.map((p, i) => (
+            {aboutParagraphs.map((p, i) => (
               <Text
                 key={`about-${i}`}
                 style={[styles.infoParagraph, {color: palette.text}]}>
@@ -1867,7 +2146,7 @@ function InfoOverlayModal({
               </Text>
             ))}
           </ScrollView>
-        ) : null}
+        )}
         </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
@@ -1882,7 +2161,6 @@ function InfoOverlayModal({
 function HomeFeedList({
   items,
   palette,
-  isDark,
   onSelect,
   onOpenLink,
   onOpenContact,
@@ -1890,14 +2168,15 @@ function HomeFeedList({
   refreshing,
   breaking,
   onOpenBreaking,
-  onShareHeadline,
+  onToggleSavedHeadline,
   onOpenHeadlinesPage,
   sections,
   onOpenSection,
+  ads,
+  adsLoading,
 }: {
   items: Article[];
   palette: HomePalette;
-  isDark: boolean;
   onSelect: (index: number) => void;
   onOpenLink: (key: InfoPageKey) => void;
   onOpenContact: () => void;
@@ -1905,10 +2184,12 @@ function HomeFeedList({
   refreshing: boolean;
   breaking: Article[];
   onOpenBreaking: (article: Article) => void;
-  onShareHeadline: (article: Article) => void;
+  onToggleSavedHeadline: (article: Article) => void;
   onOpenHeadlinesPage: () => void;
   sections: HomeCategorySection[];
   onOpenSection: (slug: CategoryKey, articleId?: string) => void;
+  ads: HomeAdsMap;
+  adsLoading: boolean;
 }): React.JSX.Element {
   const homeHeadlines = breaking.slice(0, HOME_HEADLINE_PREVIEW);
   const tajaCards = items.slice(0, TAJA_HORIZONTAL_LIMIT);
@@ -1960,8 +2241,13 @@ function HomeFeedList({
       ListHeaderComponent={
         homeHeadlines.length > 0 ? (
           <View>
-            <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
-              <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
+            <View style={[styles.homeRibbon, styles.homeRibbonCentered, {backgroundColor: palette.accent}]}>
+              <Text
+                style={[
+                  styles.homeRibbonText,
+                  styles.homeRibbonTextCentered,
+                  {color: palette.onAccent},
+                ]}>
                 शीर्ष समाचार
               </Text>
             </View>
@@ -1976,8 +2262,11 @@ function HomeFeedList({
                     key={item.id}
                     testID={headlineIndex === 0 ? 'home-headline-0' : undefined}
                     onPress={() => onOpenBreaking(item)}
+                    onLongPress={() => onToggleSavedHeadline(item)}
+                    delayLongPress={400}
                     accessibilityRole="button"
                     accessibilityLabel={item.title}
+                    accessibilityHint="लामो थिचेर सुरक्षित गर्नुहोस्"
                     style={({pressed}) => [
                       styles.headlineRow,
                       {
@@ -1991,18 +2280,6 @@ function HomeFeedList({
                       numberOfLines={2}>
                       {item.title}
                     </Text>
-                    <Pressable
-                      onPress={() => onShareHeadline(item)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Share ${item.title}`}
-                      hitSlop={8}
-                      style={styles.headlineShareBtn}>
-                      <Image
-                        source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
-                        style={styles.headlineShareImg}
-                        resizeMode="contain"
-                      />
-                    </Pressable>
                   </Pressable>
                 ))}
                 <Pressable
@@ -2024,6 +2301,16 @@ function HomeFeedList({
       }
       ListFooterComponent={
         <View style={styles.homeFooterWrap}>
+          <HomeAdSlot
+            ad={ads['below-breaking-two']}
+            loading={adsLoading}
+            palette={palette}
+          />
+          <HomeAdSlot
+            ad={ads['below-breaking-three']}
+            loading={adsLoading}
+            palette={palette}
+          />
           <View style={[styles.homeRibbon, {backgroundColor: palette.accent}]}>
             <Text style={[styles.homeRibbonText, {color: palette.onAccent}]}>
               ताजा समाचार
@@ -2045,9 +2332,10 @@ function HomeFeedList({
               </Text>
             </View>
           )}
-          {sections.map(section =>
-            section.items.length === 0 ? null : (
+          {sections.map(section => (
               <View key={section.slug}>
+                {section.items.length === 0 ? null : (
+                <>
                 <Pressable
                   onPress={() => onOpenSection(section.slug)}
                   accessibilityRole="button"
@@ -2115,6 +2403,29 @@ function HomeFeedList({
                     </Pressable>
                   );
                 })}
+                </>
+                )}
+                {section.slug === 'economy' ? (
+                  <HomeAdSlot
+                    ad={ads['below-artha']}
+                    loading={adsLoading}
+                    palette={palette}
+                  />
+                ) : null}
+                {section.slug === 'sport' ? (
+                  <HomeAdSlot
+                    ad={ads['below-khel']}
+                    loading={adsLoading}
+                    palette={palette}
+                  />
+                ) : null}
+                {section.slug === 'nation' ? (
+                  <HomeAdSlot
+                    ad={ads['below-nation']}
+                    loading={adsLoading}
+                    palette={palette}
+                  />
+                ) : null}
               </View>
             ),
           )}
@@ -2209,15 +2520,13 @@ function HomeFeedList({
 function HeadlinesList({
   items,
   palette,
-  isDark,
   onOpen,
-  onShare,
+  onToggleSaved,
 }: {
   items: Article[];
   palette: HomePalette;
-  isDark: boolean;
   onOpen: (article: Article) => void;
-  onShare: (article: Article) => void;
+  onToggleSaved: (article: Article) => void;
 }): React.JSX.Element {
   return (
     <FlatList
@@ -2242,8 +2551,11 @@ function HeadlinesList({
       renderItem={({item}) => (
         <Pressable
           onPress={() => onOpen(item)}
+          onLongPress={() => onToggleSaved(item)}
+          delayLongPress={400}
           accessibilityRole="button"
           accessibilityLabel={item.title}
+          accessibilityHint="लामो थिचेर सुरक्षित गर्नुहोस्"
           style={({pressed}) => [
             styles.homeRow,
             {
@@ -2270,18 +2582,6 @@ function HeadlinesList({
               {item.title}
             </Text>
           </View>
-          <Pressable
-            onPress={() => onShare(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Share ${item.title}`}
-            hitSlop={8}
-            style={styles.headlineShareBtn}>
-            <Image
-              source={isDark ? ICON_SHARE_DARK : ICON_SHARE}
-              style={styles.headlineShareImg}
-              resizeMode="contain"
-            />
-          </Pressable>
         </Pressable>
       )}
     />
@@ -2561,7 +2861,7 @@ const styles = StyleSheet.create({
   },
   headerDate: {
     marginTop: 2,
-    fontSize: scaleFont(isIPad ? 13 : 11),
+    fontSize: scaleFont(isTablet ? 13 : 11),
     fontWeight: '600',
     letterSpacing: 0.1,
   },
@@ -2627,11 +2927,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  drawerCloseAbs: {
+  drawerScroll: {flex: 1},
+  drawerEdgeSwipe: {
     position: 'absolute',
-    right: 10,
-    top: 8,
-    zIndex: 2,
+    left: 0,
+    bottom: 0,
+    width: 22,
+    zIndex: 20,
   },
   drawerThemeRow: {
     flexDirection: 'row',
@@ -2947,13 +3249,21 @@ const styles = StyleSheet.create({
    *  same row so those bars stay the same height. */
   homeRibbon: {
     paddingHorizontal: 16,
-    paddingVertical: isIPad ? 7 : 5,
+    paddingVertical: isTablet ? 7 : 5,
   },
   homeRibbonText: {
     fontWeight: '800',
-    fontSize: scaleFont(isIPad ? 19 : 16),
+    fontSize: scaleFont(isTablet ? 19 : 16),
     letterSpacing: 0.2,
     flexShrink: 1,
+  },
+  homeRibbonCentered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeRibbonTextCentered: {
+    textAlign: 'center',
+    width: '100%',
   },
   homeRibbonRow: {
     flexDirection: 'row',
@@ -2963,7 +3273,7 @@ const styles = StyleSheet.create({
   },
   homeRibbonSeeAll: {
     fontWeight: '700',
-    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontSize: scaleFont(isTablet ? 14 : 12),
     flexShrink: 0,
   },
   homeSectionHeaderFooter: {
@@ -2973,12 +3283,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   breakingListContent: {
-    paddingHorizontal: isIPad ? 18 : 12,
+    paddingHorizontal: isTablet ? 18 : 12,
     paddingVertical: 12,
     gap: 10,
   },
   breakingCard: {
-    width: isIPad ? 220 : 168,
+    width: isTablet ? 220 : 168,
     marginRight: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
@@ -2986,13 +3296,13 @@ const styles = StyleSheet.create({
   },
   breakingCardThumb: {
     width: '100%',
-    height: isIPad ? 130 : 96,
+    height: isTablet ? 130 : 96,
   },
   breakingCardTitle: {
     padding: 8,
-    fontSize: scaleFont(isIPad ? 15 : 13),
+    fontSize: scaleFont(isTablet ? 15 : 13),
     fontWeight: '700',
-    lineHeight: scaleFont(isIPad ? 21 : 18),
+    lineHeight: scaleFont(isTablet ? 21 : 18),
   },
   headlinePane: {
     flexGrow: 0,
@@ -3000,60 +3310,52 @@ const styles = StyleSheet.create({
   headlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: isIPad ? 18 : 12,
-    paddingVertical: isIPad ? 10 : 7,
+    justifyContent: 'center',
+    paddingHorizontal: isTablet ? 18 : 12,
+    paddingVertical: isTablet ? 10 : 7,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
     backgroundColor: Colors.background,
   },
   headlineRowTitle: {
     flex: 1,
-    fontSize: scaleFont(isIPad ? 16 : 14),
+    textAlign: 'center',
+    fontSize: scaleFont(isTablet ? 18 : 16),
     fontWeight: '700',
-    lineHeight: scaleFont(isIPad ? 22 : 19),
-  },
-  headlineShareBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headlineShareImg: {
-    width: 20,
-    height: 20,
+    lineHeight: scaleFont(isTablet ? 25 : 22),
   },
   moreHeadlinesBtn: {
-    paddingHorizontal: isIPad ? 18 : 12,
-    paddingVertical: isIPad ? 10 : 8,
-    alignItems: 'flex-start',
+    paddingHorizontal: isTablet ? 18 : 12,
+    paddingVertical: isTablet ? 10 : 8,
+    alignItems: 'center',
   },
   moreHeadlinesText: {
-    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontSize: scaleFont(isTablet ? 14 : 12),
     fontWeight: '600',
     opacity: 0.5,
   },
   homeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingHorizontal: isIPad ? 22 : 14,
-    paddingVertical: isIPad ? 16 : 12,
+    paddingHorizontal: isTablet ? 22 : 14,
+    paddingVertical: isTablet ? 16 : 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: isIPad ? 16 : 12,
+    gap: isTablet ? 16 : 12,
   },
   homeRowThumb: {
-    width: isIPad ? 110 : 72,
-    height: isIPad ? 80 : 56,
+    width: isTablet ? 110 : 72,
+    height: isTablet ? 80 : 56,
     borderRadius: 8,
   },
   homeRowTextWrap: {
     flex: 1,
-    minHeight: isIPad ? 80 : 56,
+    minHeight: isTablet ? 80 : 56,
     justifyContent: 'center',
   },
   homeRowTitle: {
-    fontSize: scaleFont(isIPad ? 19 : 16),
+    fontSize: scaleFont(isTablet ? 19 : 16),
     fontWeight: '700',
-    lineHeight: scaleFont(isIPad ? 27 : 22),
+    lineHeight: scaleFont(isTablet ? 27 : 22),
   },
   homeRowMeta: {
     marginTop: 4,
@@ -3066,16 +3368,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: isIPad ? 24 : 18,
-    paddingVertical: isIPad ? 20 : 16,
+    paddingHorizontal: isTablet ? 24 : 18,
+    paddingVertical: isTablet ? 20 : 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   homeFooterLinkText: {
-    fontSize: scaleFont(isIPad ? 19 : 17),
+    fontSize: scaleFont(isTablet ? 19 : 17),
     fontWeight: '700',
   },
   homeFooterLinkArrow: {
-    fontSize: scaleFont(isIPad ? 28 : 22),
+    fontSize: scaleFont(isTablet ? 28 : 22),
     fontWeight: '800',
   },
   homeFooterContactLink: {
@@ -3086,108 +3388,108 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   homeFooterContactMeta: {
-    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontSize: scaleFont(isTablet ? 14 : 12),
     fontWeight: '600',
   },
   contactUsRoot: {
     flexGrow: 1,
-    paddingHorizontal: isIPad ? 32 : 16,
-    paddingVertical: isIPad ? 28 : 18,
-    gap: isIPad ? 18 : 14,
+    paddingHorizontal: isTablet ? 32 : 16,
+    paddingVertical: isTablet ? 28 : 18,
+    gap: isTablet ? 18 : 14,
   },
   contactUsHeading: {
-    fontSize: scaleFont(isIPad ? 26 : 22),
+    fontSize: scaleFont(isTablet ? 26 : 22),
     fontWeight: '800',
-    marginBottom: isIPad ? 2 : 0,
+    marginBottom: isTablet ? 2 : 0,
   },
   contactUsBanner: {
     borderRadius: 14,
-    paddingHorizontal: isIPad ? 22 : 16,
-    paddingVertical: isIPad ? 20 : 16,
-    marginBottom: isIPad ? 14 : 10,
+    paddingHorizontal: isTablet ? 22 : 16,
+    paddingVertical: isTablet ? 20 : 16,
+    marginBottom: isTablet ? 14 : 10,
   },
   contactUsBannerTitle: {
-    fontSize: scaleFont(isIPad ? 28 : 24),
+    fontSize: scaleFont(isTablet ? 28 : 24),
     fontWeight: '800',
     marginBottom: 6,
   },
   contactUsBannerSub: {
-    fontSize: scaleFont(isIPad ? 15 : 13),
+    fontSize: scaleFont(isTablet ? 15 : 13),
     fontWeight: '600',
     opacity: 0.95,
   },
   contactUsPrimaryCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-    paddingHorizontal: isIPad ? 20 : 16,
-    paddingVertical: isIPad ? 18 : 14,
-    marginBottom: isIPad ? 12 : 8,
+    paddingHorizontal: isTablet ? 20 : 16,
+    paddingVertical: isTablet ? 18 : 14,
+    marginBottom: isTablet ? 12 : 8,
     gap: 6,
   },
   contactUsPrimaryLabel: {
-    fontSize: scaleFont(isIPad ? 17 : 15),
+    fontSize: scaleFont(isTablet ? 17 : 15),
     fontWeight: '800',
     marginBottom: 4,
   },
   contactUsPrimaryValue: {
-    fontSize: scaleFont(isIPad ? 18 : 16),
+    fontSize: scaleFont(isTablet ? 18 : 16),
     fontWeight: '700',
   },
   contactUsWebLink: {
     marginTop: 8,
-    fontSize: scaleFont(isIPad ? 14 : 12),
+    fontSize: scaleFont(isTablet ? 14 : 12),
     fontWeight: '700',
   },
   contactUsSubheading: {
-    fontSize: scaleFont(isIPad ? 18 : 16),
+    fontSize: scaleFont(isTablet ? 18 : 16),
     fontWeight: '600',
-    marginBottom: isIPad ? 8 : 4,
+    marginBottom: isTablet ? 8 : 4,
   },
   contactUsIntro: {
-    fontSize: scaleFont(isIPad ? 16 : 14),
-    marginBottom: isIPad ? 8 : 4,
+    fontSize: scaleFont(isTablet ? 16 : 14),
+    marginBottom: isTablet ? 8 : 4,
   },
   contactUsDivider: {
-    marginTop: isIPad ? 12 : 8,
-    marginBottom: isIPad ? 4 : 2,
-    paddingVertical: isIPad ? 16 : 12,
-    paddingHorizontal: isIPad ? 20 : 16,
+    marginTop: isTablet ? 12 : 8,
+    marginBottom: isTablet ? 4 : 2,
+    paddingVertical: isTablet ? 16 : 12,
+    paddingHorizontal: isTablet ? 20 : 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     alignItems: 'center',
   },
   contactUsDividerText: {
-    fontSize: scaleFont(isIPad ? 20 : 17),
+    fontSize: scaleFont(isTablet ? 20 : 17),
     fontWeight: '800',
   },
   footerBlock: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-    paddingHorizontal: isIPad ? 20 : 16,
-    paddingVertical: isIPad ? 16 : 14,
-    marginTop: isIPad ? 8 : 6,
+    paddingHorizontal: isTablet ? 20 : 16,
+    paddingVertical: isTablet ? 16 : 14,
+    marginTop: isTablet ? 8 : 6,
   },
   footerBlockHalf: {
     flex: 1,
   },
   footerRow: {
     flexDirection: 'row',
-    gap: isIPad ? 14 : 10,
+    gap: isTablet ? 14 : 10,
     marginTop: 0,
   },
   footerBlockTitle: {
-    fontSize: scaleFont(isIPad ? 16 : 14),
+    fontSize: scaleFont(isTablet ? 16 : 14),
     fontWeight: '800',
-    marginBottom: isIPad ? 8 : 6,
+    marginBottom: isTablet ? 8 : 6,
     letterSpacing: 0.2,
   },
   footerBlockText: {
-    fontSize: scaleFont(isIPad ? 17 : 15),
-    lineHeight: scaleFont(isIPad ? 26 : 22),
+    fontSize: scaleFont(isTablet ? 17 : 15),
+    lineHeight: scaleFont(isTablet ? 26 : 22),
   },
   footerLinkText: {
-    fontSize: scaleFont(isIPad ? 17 : 15),
-    lineHeight: scaleFont(isIPad ? 26 : 22),
+    fontSize: scaleFont(isTablet ? 17 : 15),
+    lineHeight: scaleFont(isTablet ? 26 : 22),
     textDecorationLine: 'underline',
     marginTop: 2,
   },
@@ -3197,19 +3499,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footerSocialBtn: {
-    paddingHorizontal: isIPad ? 18 : 14,
-    paddingVertical: isIPad ? 10 : 8,
+    paddingHorizontal: isTablet ? 18 : 14,
+    paddingVertical: isTablet ? 10 : 8,
     borderRadius: 999,
   },
   footerSocialTxt: {
     fontWeight: '700',
-    fontSize: scaleFont(isIPad ? 15 : 13),
+    fontSize: scaleFont(isTablet ? 15 : 13),
     letterSpacing: 0.2,
   },
   infoModalTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: scaleFont(isIPad ? 22 : 18),
+    fontSize: scaleFont(isTablet ? 22 : 18),
     fontWeight: '800',
     paddingHorizontal: 8,
   },
@@ -3235,35 +3537,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   infoModalBody: {
-    paddingHorizontal: isIPad ? 32 : 16,
-    paddingVertical: isIPad ? 24 : 16,
+    paddingHorizontal: isTablet ? 32 : 16,
+    paddingVertical: isTablet ? 24 : 16,
     paddingBottom: 48,
   },
   infoParagraph: {
-    fontSize: scaleFont(isIPad ? 19 : 16),
-    lineHeight: scaleFont(isIPad ? 30 : 26),
-    marginBottom: isIPad ? 18 : 14,
+    fontSize: scaleFont(isTablet ? 19 : 16),
+    lineHeight: scaleFont(isTablet ? 30 : 26),
+    marginBottom: isTablet ? 18 : 14,
   },
   teamCategoryBlock: {
-    marginBottom: isIPad ? 26 : 20,
+    marginBottom: isTablet ? 26 : 20,
   },
   teamCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: isIPad ? 10 : 8,
+    paddingVertical: isTablet ? 10 : 8,
     borderRadius: 6,
-    marginBottom: isIPad ? 14 : 10,
+    marginBottom: isTablet ? 14 : 10,
   },
   teamCategoryHeaderText: {
-    fontSize: scaleFont(isIPad ? 20 : 17),
+    fontSize: scaleFont(isTablet ? 20 : 17),
+    fontWeight: '800',
+    flex: 1,
+    paddingRight: 8,
+  },
+  teamCategoryChevron: {
+    fontSize: scaleFont(isTablet ? 22 : 18),
     fontWeight: '800',
   },
   teamMemberGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: isIPad ? 14 : 10,
+    gap: isTablet ? 14 : 10,
   },
   teamMemberCard: {
-    width: isIPad ? '23.5%' : '47.5%',
+    width: isTablet ? '23.5%' : '47.5%',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
     paddingHorizontal: 10,
@@ -3272,19 +3583,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   teamMemberPhoto: {
-    width: isIPad ? 110 : 84,
-    height: isIPad ? 110 : 84,
-    borderRadius: isIPad ? 55 : 42,
+    width: isTablet ? 110 : 84,
+    height: isTablet ? 110 : 84,
+    borderRadius: isTablet ? 55 : 42,
     marginBottom: 8,
   },
   teamMemberName: {
-    fontSize: scaleFont(isIPad ? 16 : 14),
+    fontSize: scaleFont(isTablet ? 16 : 14),
     fontWeight: '800',
     textAlign: 'center',
   },
   teamMemberRole: {
     marginTop: 3,
-    fontSize: scaleFont(isIPad ? 13 : 11),
+    fontSize: scaleFont(isTablet ? 13 : 11),
+    textAlign: 'center',
+  },
+  saveToastWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 28,
+    alignItems: 'center',
+    zIndex: 50,
+    elevation: 20,
+  },
+  saveToast: {
+    maxWidth: 360,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  saveToastText: {
+    fontSize: scaleFont(isTablet ? 16 : 14),
+    fontWeight: '700',
     textAlign: 'center',
   },
 });

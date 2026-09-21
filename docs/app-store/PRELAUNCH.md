@@ -33,7 +33,7 @@ Each item is independently verifiable; mark as you go.
 
 - [x] Bundle ID `com.baahrakhari` set in Xcode build settings (matches live App Store app)
 - [x] Display name "Baahrakhari" set in `Info.plist`
-- [x] Marketing version `1.4.0`, build `4` in `project.pbxproj`
+- [x] Marketing version `1.5.0`, build `5` in `project.pbxproj`
 - [x] App icons (1024 + mipmap set) generated in `Images.xcassets/AppIcon.appiconset`
 - [x] Launch screen `LaunchScreen.storyboard` configured
 - [x] `PrivacyInfo.xcprivacy` present (declares data categories)
@@ -69,22 +69,20 @@ xcrun agvtool next-version -all              # increments CFBundleVersion
 | App name | Baahrakhari |
 | Bundle ID | `com.baahrakhari` |
 | ASC App ID | `1461739733` |
-| Live version | **1.2.0** (`READY_FOR_SALE`). Next cut: **1.4.0** (build 4). |
+| Live version | Confirm in ASC (was **1.2.0** / later **1.4.0**). Next cut: **1.5.0** (build 5). |
 
-Verify with:
+Verify with (`ASC_KEY_ID` / `ASC_ISSUER_ID` already on this machine — do not echo them):
 ```sh
-export ASC_KEY_ID=4T2A93HW9T
-export ASC_ISSUER_ID=9c500f8b-2618-4f29-9688-de355b0b4df7
 python3 scripts/asc_api.py
 ```
 
-After uploading a build, in ASC → **Baahrakhari** → **+ Version** → **1.4.0** → attach the build.
+After uploading a build, in ASC → **Baahrakhari** → **+ Version** → **1.5.0** → attach the build.
 
 Production cut checklist (archive, IPA verify, TestFlight, submit):
 [`IOS_RELEASE_CHECKLIST.md`](IOS_RELEASE_CHECKLIST.md).
 
 - [x] **App record exists** — do not create a new app or use `com.baahrakhari.mobile`
-- [ ] **What's New in 1.4.0** — see `METADATA.md` / `IOS_RELEASE_CHECKLIST.md`
+- [ ] **What's New in 1.5.0** — see `METADATA.md` / `IOS_RELEASE_CHECKLIST.md`
 - [ ] **Subtitle**: see `METADATA.md`
 - [ ] **Primary category**: News
 - [ ] **Secondary category** (optional): Magazines & Newspapers
@@ -126,11 +124,12 @@ Output paths:
 - `marketing/screenshots/ipad-2064x2752/*.png`
 - `marketing/screenshots/android-phone-1080x1920/*.png` (Play Console)
 
-It walks the 1.4.0 UI: home (शीर्ष + ताजा), article, burger drawer, saved, dark home.
+It walks the 1.5.0 UI: home (शीर्ष + banners + ताजा + categories), article, burger drawer, saved, dark home.
 
-- [x] At least 2, ideally 5, screenshots per device size
-      (2026-09-04: iPhone 1284×2778 `01_home`…`05_dark_home`; iPad 2064×2752
-      `01_feed`…`05_dark_mode`. Do not upload `.raw.png`.)
+- [ ] iPhone 6.7" 1284×2778: upload `01_home` `02_article` `03_drawer` `04_saved`
+      (2026-09-20). **Do not** upload `05_dark_home` (it is a Saved duplicate).
+      **Do not** upload iPad recapture (Safari / blank / missing `02_article`)
+      or any `.raw.png`. Recapture iPad or keep the last good ASC iPad set.
 - [ ] Optional: **App Preview video** (15–30 sec) — same dimensions as
       screenshots, H.264 MP4
 
@@ -138,16 +137,16 @@ It walks the 1.4.0 UI: home (शीर्ष + ताजा), article, burger dr
 
 ## 4. Build, archive, upload
 
-- [x] **App-specific password** OR **App Store Connect API key** generated:
+- [x] **App Store Connect API key** on this machine:
       <https://appstoreconnect.apple.com/access/api>
-      - Key ID `4T2A93HW9T`, Issuer `9c500f8b-2618-4f29-9688-de355b0b4df7`
-      - `.p8` at `~/.appstoreconnect/private_keys/AuthKey_4T2A93HW9T.p8`
-- [x] Archive + export IPA (2026-09-04, `SKIP_UPLOAD=1`):
-      `build/ios/export/Baahrakhari.ipa` — **1.4.0** build **4**,
-      Apple Distribution `WGWJBSHXG5`. See `IOS_RELEASE_CHECKLIST.md`.
-- [x] Upload to App Store Connect (2026-09-04, `altool` delivery
-      `73c93b70-420b-4b2c-ac7d-6be65db21990`)
-- [x] Build **4** processed in TestFlight (**VALID**, attached to 1.4.0)
+      - Env: `ASC_KEY_ID`, `ASC_ISSUER_ID` (do not print)
+      - `.p8` at `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`
+- [ ] Archive + export IPA for **1.5.0** build **5** (`SKIP_UPLOAD=1`).
+      The 2026-09-20 18:11 IPA is **stale** (Hamro Team first-two-members
+      JS landed after it). See `IOS_RELEASE_CHECKLIST.md`.
+- [ ] Upload the **rebuilt** IPA (`npm run ios:upload`). Do not upload the
+      18:11 file.
+- [ ] Build **5** processed in TestFlight (**VALID**, attached to 1.5.0)
 
 ---
 
@@ -190,7 +189,7 @@ of app:
 
 ## 7. Post-launch
 
-- [ ] Tag the release: `git tag ios-1.4.0-build4 && git push origin --tags`
+- [ ] Tag the release: `git tag ios-1.5.0-build5 && git push origin --tags`
 - [ ] Save the archive (`*.xcarchive`) for symbolication of any crash reports
 - [ ] Enable **crash reporting** in App Store Connect (no SDK change needed —
       Apple automatic crash collection works for the New Architecture).

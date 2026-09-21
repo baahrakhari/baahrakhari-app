@@ -12,17 +12,26 @@ export const TEAM_URL = `${SITE_ORIGIN}/hamro-team`;
 const UA =
   'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 BaahrakhariMobile/1';
 
+const FETCH_TIMEOUT_MS = 15000;
+
 export async function fetchInfoHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': UA,
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': UA,
+      },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
   }
-  return res.text();
 }
 
 function stripTags(html: string): string {
@@ -34,8 +43,21 @@ function stripTags(html: string): string {
     .trim();
 }
 
+/** `String.fromCodePoint` throws on surrogates and values above 0x10ffff. */
+export function codePointToChar(n: number): string {
+  if (
+    !Number.isFinite(n) ||
+    n < 0 ||
+    n > 0x10ffff ||
+    (n >= 0xd800 && n <= 0xdfff)
+  ) {
+    return ' ';
+  }
+  return String.fromCodePoint(n);
+}
+
 function decodeEntities(raw: string): string {
-  let s = raw;
+  let s = typeof raw === 'string' ? raw : '';
   /** Some blocks are double-encoded; decode passes stabilize quickly (<=3). */
   for (let pass = 0; pass < 3; pass += 1) {
     const prev = s;
@@ -51,11 +73,9 @@ function decodeEntities(raw: string): string {
       .replace(/&rdquo;|&ldquo;/g, '"')
       .replace(/&mdash;|&ndash;/g, '—')
       .replace(/&hellip;/g, '…')
-      .replace(/&#(\d+);/g, (_, n: string) =>
-        String.fromCodePoint(Number(n) || 32),
-      )
+      .replace(/&#(\d+);/g, (_, n: string) => codePointToChar(Number(n) || 32))
       .replace(/&#x([0-9a-f]+);/gi, (_, h: string) =>
-        String.fromCodePoint(parseInt(h, 16) || 32),
+        codePointToChar(parseInt(h, 16) || 32),
       );
     if (s === prev) {
       break;
@@ -76,7 +96,10 @@ function extractDivByClass(html: string, className: string): string | undefined 
   }
   let pos = start.index + start[0].length;
   let depth = 1;
-  while (depth > 0 && pos < html.length) {
+  let steps = 0;
+  const MAX_STEPS = 20000;
+  while (depth > 0 && pos < html.length && steps < MAX_STEPS) {
+    steps += 1;
     const rest = html.slice(pos);
     const nextOpen = rest.search(/<div\b/i);
     const nextClose = rest.search(/<\/div>/i);
@@ -92,6 +115,9 @@ function extractDivByClass(html: string, className: string): string | undefined 
       depth -= 1;
       pos += c + 6;
     }
+  }
+  if (depth !== 0) {
+    return undefined;
   }
   return html.slice(start.index + start[0].length, pos - 6);
 }

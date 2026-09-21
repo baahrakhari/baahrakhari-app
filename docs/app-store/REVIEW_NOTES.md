@@ -14,15 +14,29 @@ Reviewer can simply open the App and start reading.
 ## Demo path the reviewer can follow (30 seconds)
 
 1. Launch the App. After the splash, Home shows the Baahrakhari logo, the
-   Nepali date, a slim **शीर्ष समाचार** list (up to 12 rows), then a
-   **ताजा समाचार** horizontal strip.
-2. Tap the logo — returns to Home. Open the burger (top-left).
-3. In the drawer: theme (sun/moon), **सुरक्षित लेखहरू** (Saved), and
-   **सम्पर्क गर्नुहोस्** / **Contact us**. Categories are below.
-4. Tap a **शीर्ष समाचार** row or a **ताजा** card to open the article.
-5. Pinch on the article body — the Nepali type resizes.
-6. Tap the bookmark on the article to save it; open Saved from the drawer.
-7. Share from a headline row or from the article.
+   Nepali date, **शीर्ष समाचार** (larger two-line type), optional static
+   house banners, a **ताजा समाचार** horizontal strip, then the same
+   category sections as the burger menu (राजनीति, अर्थ, खेल, विचार, देश,
+   साहित्य, सम्पादकीय, विदेश).
+2. Long-press a Top News headline to save it. Share lives on the article
+   reader, not on the Home row.
+3. Tap the logo — returns to Home. Open the burger (top-left); tap the
+   dimmed overlay to close. Theme control is at the **bottom** of the
+   drawer. **सुरक्षित लेखहरू** and **सम्पर्क गर्नुहोस्** / **Contact us**
+   are in the drawer with the categories.
+4. Open **हाम्रो टिम**. Each section starts collapsed with the **first two
+   members** visible; the dropdown reveals the rest (hierarchy order
+   preserved).
+5. Tap a **शीर्ष समाचार** row or a **ताजा** card to open the article.
+6. Pinch on the article body — the Nepali type resizes. Bookmark and share
+   are on the reader.
+7. Open Saved from the drawer.
+
+Home may show a few **first-party static banners** scraped from
+baahrakhari.com (images only; GIFs show the first frame). They sit in the
+Home list, never cover the article, and are **not** AdMob / not a
+third-party ad SDK. Tapping a banner may open the advertiser URL in the
+system browser.
 
 ## Content-rights statement (relevant to Guideline 5.2.3)
 
@@ -59,7 +73,9 @@ content is sent to or received from a server for the notification itself.
 - No location services (the empty `NSLocationWhenInUseUsageDescription`
   string in earlier builds was removed in 1.1.0).
 - No camera, microphone, contacts, photos, calendar, or motion data access.
-- No advertising SDKs or third-party analytics.
+- No AdMob, no IDFA, no third-party advertising or analytics SDKs.
+  Home-only static house banners from baahrakhari.com are first-party
+  images, not an ad network.
 
 ## Contact during review
 

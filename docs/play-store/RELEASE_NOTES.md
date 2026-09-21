@@ -6,18 +6,76 @@ Copy-paste source for Android release notes in Play Console.
 |---|---|
 | Package | `com.baahrakhari.media` |
 | Contact URL (News declaration) | `https://baahrakhari.com/contact` |
-| **Current release** | `1.4.0` (`versionCode 131`) — Prateek home/drawer cut |
+| **Current release** | `1.5.0` (`versionCode 132`) — home categories, drawer, home-only static ads |
 
 Full upload checklist: `docs/play-store/NEWS_POLICY_COMPLIANCE.md`
 
 ---
 
-## 1.4.0 — current release (upload this)
+## 1.5.0 — current release (upload this)
+
+Home now mirrors baahrakhari.com’s magazine stack: Top News, every burger
+category below the fold, and first-party static house banners on Home only.
+Drawer loses the ✕ (overlay tap still closes); theme sits on the floor.
+Hamro team sections start collapsed. Dual iOS + Android cut. **No** AdMob,
+road-block, or in-article ads — declare Ads in Data safety as first-party
+Home banners (no advertising ID).
+
+| | |
+|---|---|
+| **versionName** | `1.5.0` |
+| **versionCode** | `132` (must be **> 131**) |
+| **applicationId** | `com.baahrakhari.media` |
+| **targetSdk** | `36` (compileSdk 36, minSdk 24) |
+| **AAB to upload** | `android/app/build/outputs/bundle/release/app-release.aab` |
+| **Absolute AAB path** | `/Users/praak/cursor_12KHARI/baahrakhari-app/android/app/build/outputs/bundle/release/app-release.aab` |
+| **Play API upload** | **Not configured** — Console-only. |
+
+Wizard: `npm run play:wizard` (`docs/play-store/PLAY_UPLOAD_WIZARD.md`).
+Click-through: `docs/play-store/UPLOAD_NEW_RELEASE.md`. Policy: `docs/play-store/NEWS_POLICY_COMPLIANCE.md`.
+
+### What's new (en-US)
+
+```text
+Home now matches baahrakhari.com more closely.
+
+• Larger Top News type (two lines); long-press a headline to save — share stays in the reader
+• Below the fold: राजनीति, अर्थ व्यवसाय, खेल, विचार, देश, साहित्य, सम्पादकीय, विदेश
+• Burger: overlay tap to close, theme at the bottom, swipe from the left edge on lists
+• Hamro team sections start collapsed; home-only static house banners (no pop-ups)
+```
+
+### What's new (ne-NP)
+
+```text
+गृहपृष्ठ अब baahrakhari.com सँग अझ मिल्दोजुल्दो छ।
+
+• शीर्ष समाचारको अक्षर ठूलो (दुई हरफ); लामो थिचेर सेभ — सेयर पठन पृष्ठमा रहन्छ
+• मुनि: राजनीति, अर्थ व्यवसाय, खेल, विचार, देश, साहित्य, सम्पादकीय, विदेश
+• बर्गर: ओभरले थिचेर बन्द, थिम तल, सूचीमा बायाँ किनाराबाट स्वाइप
+• हाम्रो टिम सुरुमा संक्षिप्त; गृहपृष्ठमा मात्र स्थिर ब्यानर (पप-अप होइन)
+```
+
+### Short (en-US)
+
+```text
+Larger Top News, all home categories, collapsed team, home-only static banners.
+```
+
+### Short (ne-NP)
+
+```text
+ठूलो शीर्ष समाचार, सबै गृह श्रेणी, संक्षिप्त टिम, गृहपृष्ठका स्थिर ब्यानर।
+```
+
+---
+
+## 1.4.0 — previous release
 
 Home-feed redesign from Prateek’s feedback: website-style headlines pane,
 slim ribbons, drawer Home/theme/save, Nepali date, and Play-visible
-Contact us. Dual iOS + Android cut. **Ads (item 9) were not added** —
-do not claim ads in Play listing, Data safety, or News declarations.
+Contact us. Dual iOS + Android cut. **Ads (item 9) were not added** in
+1.4.0.
 
 | | |
 |---|---|

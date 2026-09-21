@@ -7,6 +7,8 @@ export const TAJA_NEWS_API_URL = `${SITE_ORIGIN}/api/getTajaNews`;
 export const BANNER_DATAS_API_URL = `${SITE_ORIGIN}/api/getBannerDatas`;
 /** Dedicated contact page on the news website. Use in Play Console declarations. */
 export const SITE_CONTACT_URL = `${SITE_ORIGIN}/contact`;
+/** First-party house banners for the home feed only (no ad SDK). */
+export const ADVERTISEMENT_API_URL = `${SITE_ORIGIN}/api/getAdvertisementData`;
 export const SITE_HEADER_LOGO_URL =
   'https://baahrakhari.com/themes/baahrakhari/images/logo.png';
 
@@ -52,6 +54,21 @@ export const NEWS_CATEGORIES: Array<{
 /** Category rows in the burger menu — Contact is rendered separately (two lines). */
 export const DRAWER_FEED_CATEGORIES = NEWS_CATEGORIES.filter(
   cat => cat.slug !== 'contact-us',
+);
+
+/**
+ * Below-the-fold home previews: every burger feed except `latest-news`
+ * (पछिल्ला stays in the drawer; ताजा समाचार is that feed on home).
+ * Economy keeps the website magazine label.
+ */
+export const HOME_PREVIEW_CATEGORIES: Array<{
+  slug: CategorySlug;
+  label: string;
+}> = DRAWER_FEED_CATEGORIES.filter(cat => cat.slug !== 'latest-news').map(
+  cat => ({
+    slug: cat.slug as CategorySlug,
+    label: cat.slug === 'economy' ? 'अर्थ व्यवसाय' : cat.label,
+  }),
 );
 
 /** External pages linked from the site's header/footer. */

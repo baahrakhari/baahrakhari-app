@@ -27,7 +27,139 @@ Hard limits in parentheses are Apple's character caps.
 
 ---
 
-## Version 1.4.0 — Listing copy
+## Version 1.5.0 — Listing copy
+
+Live store version may still be **1.4.0** / **1.2.0**. This copy is for the
+**1.5.0** update (build 5). Checklist: [`IOS_RELEASE_CHECKLIST.md`](IOS_RELEASE_CHECKLIST.md).
+
+### English (en-US)
+
+**App name** (30): `Baahrakhari`
+
+**Subtitle** (30): `बाह्रखरी समाचार · Nepal news`
+
+**Promotional text** (170, editable without resubmit):
+> Stay current with Baahrakhari — the latest news from Nepal across politics,
+> economy, sports, and opinion, in clean Nepali typography on iPhone and iPad.
+
+**Description** (4000):
+```
+Baahrakhari brings the live news feed of baahrakhari.com to your iPhone and
+iPad, redesigned for fast reading in clean Devanagari typography.
+
+WHAT YOU CAN DO
+• Swipe through the latest headlines across every Baahrakhari section
+  (पछिल्ला, राजनीति, अर्थ, खेल, विचार, देश, साहित्य, सम्पादकीय, विदेश).
+• Home shows Top News, a ताजा strip, then every section from the burger menu.
+• Tap any article to read the full story in a calm, single-column layout.
+  Share from the reader; long-press a Top News headline to save it.
+• Pinch to zoom the Nepali body type to whatever size is comfortable.
+• Save articles for later; saved stories open instantly even when offline.
+• Light and dark modes from the burger menu (theme control at the bottom).
+• Optional gentle reminders when fresh top stories arrive (off by default).
+
+WHY YOU'LL LIKE IT
+• Built around how Nepali readers actually read — no autoplay video, no
+  pop-ups, no third-party ad networks. Home may show a few static house
+  banners from baahrakhari.com; they never cover the article you are reading.
+• Tablet-optimised on iPad and Android: bigger type and comfortable padding.
+  iPad keeps a glass-style next-article button for long reading sessions.
+• Respects your data: all preferences stay on your device. No account, no
+  login, no tracking SDKs.
+
+ABOUT
+Baahrakhari (बाह्रखरी) is one of Nepal's established online news outlets.
+This app is the official mobile companion of baahrakhari.com.
+```
+
+**Keywords** (100 chars total, comma-separated, no spaces after commas):
+```
+news,nepal,nepali,kathmandu,समाचार,बाह्रखरी,politics,sports,opinion
+```
+
+**Support URL** (required, must be live HTTPS):
+`https://baahrakhari.com/contact`
+
+**Marketing URL** (optional):
+`https://baahrakhari.com`
+
+**Privacy Policy URL** (required):
+`https://baahrakhari.com/page/privacy-policy`
+
+**Copyright** (50):
+`© 2026 Baahrakhari Pvt. Ltd.`
+
+---
+
+### Nepali (ne-NP)
+
+**App name**: `बाह्रखरी`
+
+**Subtitle**: `नेपालका समाचार र विचार`
+
+**Promotional text**:
+> राजनीति, अर्थ, खेल, विचारसहितका बाह्रखरीका ताजा समाचार अब iPhone र iPad मा —
+> सफा देवनागरी अक्षरमा, सरल पठनशैलीमा।
+
+**Description**:
+```
+बाह्रखरी एप्लिकेसनले baahrakhari.com का ताजा समाचार तपाईंको iPhone वा iPad मा
+सजिलो, सफा देवनागरी टाइपोग्राफीमा पुर्‍याउँछ।
+
+मुख्य सुविधाहरू
+• पछिल्ला, राजनीति, अर्थ, खेल, विचार, देश, साहित्य, सम्पादकीय र विदेश —
+  सबै शीर्षकहरू एकै ठाउँमा।
+• गृहपृष्ठमा शीर्ष समाचार, ताजा स्ट्रिप, र बर्गर मेनुका सबै श्रेणी।
+• कुनै पनि समाचारलाई ट्याप गरेर शान्त पठनशैलीमा पढ्नुहोस्। सेयर पठन पृष्ठमा;
+  शीर्ष समाचारमा लामो थिचेर सेभ गर्नुहोस्।
+• नेपाली अक्षरको आकार पिञ्च गरेर मनपर्ने साइजमा सेट गर्नुहोस्।
+• मनपरेका समाचार सेभ गर्नुहोस्; इन्टरनेट नहुँदा पनि तुरुन्तै खोल्नुहोस्।
+• बर्गर मेनुबाट अध्यारो/उज्यालो मोड (थिम तलतिर)।
+• चाहिए मात्र: नयाँ समाचारको शान्त सूचना।
+
+तपाईंको गोपनीयता
+सबै सेटिङ तपाईंको यन्त्रमै रहन्छ। कुनै खाता चाहिँदैन, कुनै ट्र्याकर छैन।
+गृहपृष्ठमा baahrakhari.com का केही स्थिर ब्यानर देखिन सक्छन् — पठन पृष्ठ छोप्दैनन्।
+
+बाह्रखरीबारे
+बाह्रखरी नेपालको पुरानो र विश्वसनीय अनलाइन समाचार पोर्टल हो।
+यो एप त्यसैको आधिकारिक मोबाइल साथी हो।
+```
+
+**Keywords**:
+```
+समाचार,बाह्रखरी,नेपाल,काठमाडौं,राजनीति,खेलकुद,अर्थ,विचार,देश
+```
+
+---
+
+## What's New in This Version — 1.5.0
+
+Per-version field in App Store Connect. Matches the Android 1.5.0 notes.
+
+### en-US
+```
+Home now matches baahrakhari.com more closely.
+
+• Larger Top News type (two lines); long-press a headline to save — share stays in the reader
+• Below the fold: राजनीति, अर्थ व्यवसाय, खेल, विचार, देश, साहित्य, सम्पादकीय, विदेश
+• Burger: overlay tap to close, theme at the bottom, swipe from the left edge on lists
+• Hamro team sections start collapsed with the first two members visible; home-only static house banners (no AdMob)
+```
+
+### ne-NP
+```
+गृहपृष्ठ अब baahrakhari.com सँग अझ मिल्दोजुल्दो छ।
+
+• शीर्ष समाचारको अक्षर ठूलो (दुई हरफ); लामो थिचेर सेभ — सेयर पठन पृष्ठमा रहन्छ
+• मुनि: राजनीति, अर्थ व्यवसाय, खेल, विचार, देश, साहित्य, सम्पादकीय, विदेश
+• बर्गर: ओभरले थिचेर बन्द, थिम तल, सूचीमा बायाँ किनाराबाट स्वाइप
+• हाम्रो टिम सुरुमा संक्षिप्त; पहिलो दुई सदस्य देखिन्छन्; गृहपृष्ठमा मात्र स्थिर ब्यानर (AdMob होइन)
+```
+
+---
+
+## Version 1.4.0 — Listing copy (previous)
 
 Live store version is **1.2.0**. This copy is for the **1.4.0** update
 (build 4). Checklist: [`IOS_RELEASE_CHECKLIST.md`](IOS_RELEASE_CHECKLIST.md).
@@ -162,10 +294,10 @@ Home screen now matches baahrakhari.com more closely.
 
 | Phase | Audience | Build | Notes |
 |---|---|---|---|
-| 0 | Internal TestFlight | 1.4.0 (4) | Just the team |
-| 1 | External TestFlight | 1.4.0 (4) | Optional; extra beta review |
-| 2 | Phased App Store release | 1.4.0 (4) | 1% → 100% over 7 days (Apple default) |
-| 3 | Full availability | 1.4.0 (5)+ | Only if you need a follow-up build |
+| 0 | Internal TestFlight | 1.5.0 (5) | Just the team. Rebuild IPA first — 18:11 archive is stale. |
+| 1 | External TestFlight | 1.5.0 (5) | Optional; extra beta review |
+| 2 | Phased App Store release | 1.5.0 (5) | 1% → 100% over 7 days (Apple default) |
+| 3 | Full availability | 1.5.0 (6)+ | Only if you need a follow-up build |
 
 In ASC → Version Release pick **"Automatically release this version using
 phased release for automatic updates"** for Phase 2.

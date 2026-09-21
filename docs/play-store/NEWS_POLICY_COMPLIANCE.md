@@ -4,12 +4,12 @@ Upload guide for **Baahrakhari** (`com.baahrakhari.media`).
 
 | | |
 |---|---|
-| **Current AAB** | `1.4.0` / `versionCode 131` — Prateek home/drawer cut (local `gradle.properties`) |
+| **Current AAB** | `1.5.0` / `versionCode 132` — home categories, drawer, static house banners (local `gradle.properties`) |
 | **AAB file** | `android/app/build/outputs/bundle/release/app-release.aab` (~37 MB) |
 | **Absolute AAB path** | `/Users/praak/cursor_12KHARI/baahrakhari-app/android/app/build/outputs/bundle/release/app-release.aab` |
 | **Built / verified** | 2026-09-03 (`aapt` / `jarsigner` / `apksigner` — see `RELEASE_NOTES.md`) |
 | **targetSdk** | `36` |
-| **Ads this cut** | **None** — item 9 skipped. Do not claim ads in listing or Data safety. |
+| **Ads this cut** | **Yes — first-party house banners on Home only.** Static images from baahrakhari.com `getAdvertisementData`. No ad SDK, no `AD_ID`, no road-block, no in-article ads. Declare Ads in Data safety. |
 | **Upload steps** | see `docs/play-store/UPLOAD_NEW_RELEASE.md` (internal testing first) |
 | **Appeal case** | `[3-4690000040664]` (Google Play reply, 2 Jun 2026) |
 | **Policy** | [News and Magazines](https://support.google.com/googleplay/android-developer/answer/9935326) |
@@ -20,16 +20,16 @@ Upload guide for **Baahrakhari** (`com.baahrakhari.media`).
 
 ## Quick upload checklist
 
-- [x] `android/gradle.properties` → `APP_VERSION_CODE=131`, `APP_VERSION_NAME=1.4.0` (bump both if a higher versionCode was already uploaded)
+- [ ] `android/gradle.properties` → `APP_VERSION_CODE=132`, `APP_VERSION_NAME=1.5.0` (bump both if a higher versionCode was already uploaded)
 - [x] Build AAB (see **Build** below) — wizard verified 2026-09-04
 - [x] Device smoke test: Pixel_10_API_36 release APK (home + drawer); re-check Contact on Console testers
 - [ ] Play Console → **Store settings** → website, email, phone (see `PLAY_CONSOLE_ACCOUNT.md`)
 - [ ] Play Console → **App content → News and magazine apps** → contact URL
-- [ ] Play Console → **App content → Data safety**: no ads, no advertising ID
-      (this AAB has no `AD_ID` permission and no ad SDK)
+- [ ] Play Console → **App content → Data safety**: **Ads = yes**
+      (first-party house banners on Home; no advertising ID / no ad SDK)
 - [ ] Play Console → upload AAB to **Internal testing** (or an existing
       draft) first — not a production 100% rollout
-- [ ] Paste release notes from `RELEASE_NOTES.md` section **1.4.0**
+- [ ] Paste release notes from `RELEASE_NOTES.md` section **1.5.0**
 - [ ] **Save** the release. Stop before **Start rollout to Production**
 - [ ] After internal verify: promote / Production rollout → **Publishing
       overview → Send for review** if prompted
@@ -107,8 +107,8 @@ Set signing in `android/gradle.properties` (local only — do not commit passwor
 
 ```properties
 APP_APPLICATION_ID=com.baahrakhari.media
-APP_VERSION_CODE=131
-APP_VERSION_NAME=1.4.0
+APP_VERSION_CODE=132
+APP_VERSION_NAME=1.5.0
 MYAPP_UPLOAD_STORE_FILE=/path/to/12khari.jks
 MYAPP_UPLOAD_KEY_ALIAS=abp
 MYAPP_UPLOAD_STORE_PASSWORD=***
@@ -157,22 +157,21 @@ cd android && ./gradlew bundleRelease
 
 ---
 
-## Play Console — Data safety (do not claim ads)
+## Play Console — Data safety (declare first-party home ads)
 
 There is **no** committed Data safety questionnaire in this repo. Confirm
-the existing Play Console form before review. For **1.4.0**:
+the existing Play Console form before review. For **1.5.0**:
 
 | Topic | This build |
 |---|---|
-| Ads / road-block / content-block | **Not implemented** (checklist item 9 skipped). `adSpacer` in the article reader is layout chrome, not an ad. |
+| Ads | **Yes — first-party house banners** on the Home feed only (`home.*` slots from baahrakhari.com). Static images; tap opens the advertiser URL. **No** AdMob / third-party ad SDK, **no** advertising ID, **no** road-block interstitial, **no** in-article / sidebar / sticky / header ads. `adSpacer` in the article reader is layout chrome, not an ad. |
 | Advertising ID (`AD_ID`) | **Not declared** in the merged APK manifest |
 | Notifications | Optional local new-story reminders; `POST_NOTIFICATIONS` + `VIBRATE` |
 | Third-party ad SDKs | None |
-| Firebase / FCM | Present as a transitive dependency of `react-native-push-notification` (C2DM / `WAKE_LOCK` / `ACCESS_NETWORK_STATE` show up in the merged APK). Declare according to what Play’s Data safety questionnaire already has from prior releases — do **not** newly claim “no SDKs” if the form previously listed Firebase, and do **not** add an Ads declaration. |
 
 A missing or ads-mismatched Data safety form **can block review**. Re-open
-**App content → Data safety** and save if Play says it is outdated for
-targetSdk 36.
+**App content → Data safety** and save if Play says it is outdated. Declare
+Ads to match the home banners; do **not** claim an advertising ID.
 
 ## Play Console — Upload release
 
@@ -180,11 +179,11 @@ targetSdk 36.
 existing unpublished draft).
 
 **Path (production, after verify):** Release → Production, preferably
-**Promote** the internal release so `versionCode 131` is reused.
+**Promote** the internal release so `versionCode 132` is reused.
 
 1. Create release with
    `/Users/praak/cursor_12KHARI/baahrakhari-app/android/app/build/outputs/bundle/release/app-release.aab`
-2. Add release notes from `RELEASE_NOTES.md` section **1.4.0**
+2. Add release notes from `RELEASE_NOTES.md` section **1.5.0**
 3. **Save**. Do **not** set production rollout to 100% on the first pass
 4. After internal verify: Production rollout % of your choice →
    **Publishing overview → Send for review** if prompted
